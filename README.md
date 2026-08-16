@@ -70,7 +70,6 @@ set -g alternate-screen off    # Claude Code 输出进历史,滚动才有内容�
 ```bash
 npm install -g tapmux
 tapmux-relay &            # 建议配 systemd 常驻
-tapmux-relay invite       # 生成一枚单次邀请码
 ```
 
 建用户与邀请码(**一人一 token,机器挂人名下**):
