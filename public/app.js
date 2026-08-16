@@ -3,6 +3,12 @@
 
 const $ = (s) => document.querySelector(s);
 
+// 基准路径:直连时为 "/",经 relay 挂载时为 "/d/<设备>/"。所有请求都从这里出发
+const BASE = location.pathname.endsWith('/')
+  ? location.pathname
+  : location.pathname.replace(/[^/]*$/, '');
+const u = (p) => BASE + String(p).replace(/^\//, '');
+
 const state = {
   cur: null,          // 当前打开的会话名
   term: null,
@@ -22,7 +28,7 @@ const state = {
 /* ---------- 基础 ---------- */
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(u(path), {
     headers: opts.body ? { 'content-type': 'application/json' } : {},
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -203,7 +209,7 @@ function connect() {
   clearTimeout(state.retryTimer);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const q = `session=${encodeURIComponent(state.cur)}&cols=${state.term.cols}&rows=${state.term.rows}`;
-  const ws = new WebSocket(`${proto}://${location.host}/ws/attach?${q}`);
+  const ws = new WebSocket(`${proto}://${location.host}${u('ws/attach')}?${q}`);
   ws.binaryType = 'arraybuffer';
   state.ws = ws;
   dot('mid');
@@ -447,7 +453,7 @@ $('#btn-photo').onclick = () => $('#file-input').click();
 
 async function uploadOne(file) {
   const blob = await shrinkImage(file);
-  const res = await fetch('/api/upload', {
+  const res = await fetch(u('api/upload'), {
     method: 'POST',
     headers: { 'content-type': blob.type },
     body: blob,
@@ -458,8 +464,8 @@ async function uploadOne(file) {
   const chips = $('#chips');
   chips.classList.remove('hidden');
   const img = document.createElement('img');
-  img.src = data.url;
-  img.onclick = () => window.open(data.url);
+  img.src = u(data.url);
+  img.onclick = () => window.open(u(data.url));
   chips.appendChild(img);
 
   const sep = compose.value && !compose.value.endsWith(' ') ? ' ' : '';

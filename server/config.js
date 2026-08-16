@@ -14,6 +14,23 @@ const DEFAULTS = {
   uploadRetentionDays: 14,
   // 会话内新建 Claude Code 时执行的命令
   claudeCommand: 'claude',
+  // 通知消息里的直达链接前缀(如 https://your.domain),留空则消息不带链接
+  publicUrl: '',
+  // Telegram 通知:enabled + botToken + chatId 三者齐备才生效
+  notify: {
+    enabled: false,
+    telegramBotToken: '',
+    telegramChatId: '',
+    proxyUrl: '',
+    minWorkingSeconds: 60,
+  },
+  // relay 接入(tapmux relay-join 自动填写):设为空对象即为直连形态
+  relay: {
+    url: '',
+    deviceName: '',
+    deviceToken: '',
+    proxyUrl: '',
+  },
 };
 
 // 项目曾用名 palmux(2026-08 改名 tapmux):老部署目录整体改名,token 与纳管清单无感迁移

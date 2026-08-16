@@ -1,6 +1,6 @@
 {
   "name": "tapmux",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Operate tmux / Claude Code from your phone browser. 掌上 tmux —— 手机浏览器操作家里机器上的 Claude Code",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "@lydell/node-pty": "^1.1.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "https-proxy-agent": "^7.0.5"
   },
   "license": "MIT",
   "repository": {
@@ -22,7 +23,8 @@
     "url": "https://github.com/coderdailyone/tapmux.git"
   },
   "bin": {
-    "tapmux": "bin/tapmux.js"
+    "tapmux": "bin/tapmux.js",
+    "tapmux-relay": "bin/tapmux-relay.js"
   },
   "files": [
     "bin/",

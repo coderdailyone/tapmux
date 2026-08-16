@@ -17,6 +17,8 @@ import {
 } from './uploads.js';
 import { handleAttach } from './attach.js';
 import { previewFromCapture, detectClaudeState } from './preview.js';
+import { Notifier } from './notify.js';
+import { startAgent } from './agent.js';
 
 const config = loadConfig();
 const store = new ManagedStore(config.dataDir);
@@ -195,7 +197,8 @@ const server = http.createServer(async (req, res) => {
     return send(res, 401, '<meta charset="utf-8">未授权:请用带 token 的完整链接打开', { 'content-type': 'text/html; charset=utf-8' });
   }
   if (auth.redirect) {
-    return send(res, 302, '', { 'set-cookie': auth.setCookie, location: auth.redirect || '/' });
+    // 相对跳转:经 relay 挂在子路径下时,浏览器会基于当前 URL 解析,直连时等价于 "/"
+    return send(res, 302, '', { 'set-cookie': auth.setCookie, location: `.${auth.redirect || '/'}` });
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD' && !originOk(req)) {
@@ -264,6 +267,14 @@ server.on('upgrade', (req, socket, head) => {
 
 cleanupOldUploads(config.uploadDir, config.uploadRetentionDays);
 setInterval(() => cleanupOldUploads(config.uploadDir, config.uploadRetentionDays), 24 * 3600 * 1000).unref();
+
+const notifier = new Notifier(config, { probe, capture: capturePane, detect: detectClaudeState });
+if (notifier.enabled()) {
+  setInterval(() => notifier.tick(), 15_000).unref();
+  console.log('[tapmux] Telegram 通知巡检已启用(15s 一拍)');
+}
+
+startAgent(config);
 
 server.listen(config.port, config.bind, () => {
   const ifaces = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);

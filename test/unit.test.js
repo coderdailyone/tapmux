@@ -8,6 +8,48 @@ import { validSessionName, validKeys } from '../server/tmux.js';
 import { tokensEqual, parseCookies } from '../server/auth.js';
 import { extForMime, saveImage, resolveServable, cleanupOldUploads } from '../server/uploads.js';
 import { previewFromCapture, detectClaudeState } from '../server/preview.js';
+import { decideNotification } from '../server/notify.js';
+import { T, encode, decode, encodeJson, parseJson, cleanHeaders } from '../server/relay/protocol.js';
+import { Registry } from '../server/relay/registry.js';
+
+test('relay 协议:帧编解码往返 + 头清洗', () => {
+  const f = decode(encode(T.RES_BODY, 42, Buffer.from('数据')));
+  assert.equal(f.type, T.RES_BODY);
+  assert.equal(f.sid, 42);
+  assert.equal(f.payload.toString(), '数据');
+  const j = decode(encodeJson(T.REQ, 7, { method: 'GET', path: '/x' }));
+  assert.deepEqual(parseJson(j.payload), { method: 'GET', path: '/x' });
+  assert.equal(decode(Buffer.alloc(3)), null);
+  const h = cleanHeaders({ Cookie: 'a=1', Connection: 'keep-alive', Host: 'x', 'content-type': 'json' });
+  assert.deepEqual(h, { Cookie: 'a=1', 'content-type': 'json' });
+});
+
+test('relay 注册表:邀请码单次有效,token 只存哈希,可吊销', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tapmux-reg-'));
+  const reg = new Registry(dir);
+  const code = reg.createInvite();
+  assert.ok(reg.register('wrong', 'a').error);
+  const r = reg.register(code, 'home-1');
+  assert.equal(r.name, 'home-1');
+  assert.ok(reg.register(code, 'other').error, '同码二次使用必须失败');
+  assert.ok(reg.auth('home-1', r.deviceToken));
+  assert.ok(!reg.auth('home-1', 'bad'));
+  assert.ok(!JSON.stringify(reg.data).includes(r.deviceToken), '明文 token 不落盘');
+  assert.ok(reg.register(reg.createInvite(), 'Home!').error, '非法设备名拒绝');
+  assert.ok(reg.revoke('home-1'));
+  assert.ok(!reg.auth('home-1', r.deviceToken));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('通知决策:等确认必发,完工须干满时长,其余不扰', () => {
+  const min = { minWorkingMs: 60_000 };
+  assert.equal(decideNotification({ prevState: 'working', nextState: 'waiting', workingMs: 5000, ...min }).kind, 'waiting');
+  assert.equal(decideNotification({ prevState: 'working', nextState: 'idle', workingMs: 90_000, ...min }).kind, 'done');
+  assert.equal(decideNotification({ prevState: 'working', nextState: 'idle', workingMs: 20_000, ...min }), null);
+  assert.equal(decideNotification({ prevState: 'idle', nextState: 'working', workingMs: 0, ...min }), null);
+  assert.equal(decideNotification({ prevState: 'idle', nextState: 'waiting', workingMs: 0, ...min }).kind, 'waiting');
+  assert.equal(decideNotification({ prevState: 'waiting', nextState: 'idle', workingMs: 0, ...min }), null);
+});
 
 test('Claude 状态感知:等确认 > 干活中 > 空闲', () => {
   assert.equal(detectClaudeState('✻ Crunching… (esc to interrupt)'), 'working');
