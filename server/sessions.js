@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// 纳管清单:哪些 tmux 会话归 palmux 网页管理。状态存本机,VPS 无感。
+// 纳管清单:哪些 tmux 会话归 tapmux 网页管理。状态存本机,VPS 无感。
 export class ManagedStore {
   constructor(dataDir) {
     this.file = path.join(dataDir, 'sessions.json');

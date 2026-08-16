@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-const COOKIE_NAME = 'palmux_token';
+const COOKIE_NAME = 'tapmux_token';
 
 // 登录失败退避:ip -> { fails, blockedUntil }
 const attempts = new Map();

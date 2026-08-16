@@ -65,13 +65,13 @@ export function handleAttach(ws, name, { cols, rows }) {
       }
     } catch (err) {
       // pty 竞态死亡时的 write/resize 异常:关此连接即可,绝不许波及进程
-      console.error(`[palmux] pty op failed on ${name}:`, err.message);
+      console.error(`[tapmux] pty op failed on ${name}:`, err.message);
       try { ws.close(1011, 'pty gone'); } catch {}
     }
   });
 
   ws.on('error', (err) => {
-    console.error(`[palmux] ws error on ${name}:`, err.message);
+    console.error(`[tapmux] ws error on ${name}:`, err.message);
     try { ws.terminate(); } catch {}
   });
 

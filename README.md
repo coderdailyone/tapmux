@@ -1,25 +1,25 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/banner.svg" width="840" alt="palmux — 掌上 tmux">
+  <img src="https://raw.githubusercontent.com/coderdailyone/tapmux/main/assets/banner.svg" width="840" alt="tapmux — 掌上 tmux">
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/palmux"><img src="https://img.shields.io/npm/v/palmux?color=34d399&label=npm" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/tapmux"><img src="https://img.shields.io/npm/v/tapmux?color=34d399&label=npm" alt="npm"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A520-34d399" alt="node >= 20">
   <img src="https://img.shields.io/badge/license-MIT-8b9bab" alt="MIT">
 </p>
 
 <p align="center">用手机浏览器操作你机器上的 tmux 会话,专为「随时随地指挥 Claude Code」而生。</p>
 
-> **palmux** is a self-hosted web bridge for driving tmux sessions — especially [Claude Code](https://claude.com/claude-code) — from your phone's browser. One Node process on the machine where tmux lives; a PWA-ready mobile UI with an IME-friendly compose bar, a scroll rail wired to tmux copy-mode, image upload straight into Claude's context, and battle-tested reconnect logic. tmux is the single source of truth: disconnect anywhere, reattach and the screen redraws authoritatively.
+> **tapmux** is a self-hosted web bridge for driving tmux sessions — especially [Claude Code](https://claude.com/claude-code) — from your phone's browser. One Node process on the machine where tmux lives; a PWA-ready mobile UI with an IME-friendly compose bar, a scroll rail wired to tmux copy-mode, image upload straight into Claude's context, and battle-tested reconnect logic. tmux is the single source of truth: disconnect anywhere, reattach and the screen redraws authoritatively.
 
 <table align="center">
   <tr>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-sessions.png" width="330" alt="会话列表"><br>
+      <img src="https://raw.githubusercontent.com/coderdailyone/tapmux/main/assets/screenshot-sessions.png" width="330" alt="会话列表"><br>
       <sub>会话列表:状态徽章 · 等确认高亮 · 屏幕预览 · 探测纳管</sub>
     </td>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-terminal.jpg" width="330" alt="终端视图"><br>
+      <img src="https://raw.githubusercontent.com/coderdailyone/tapmux/main/assets/screenshot-terminal.jpg" width="330" alt="终端视图"><br>
       <sub>终端视图:中文输入条 · 快捷键 · 侧边滚轮(iPhone 实拍)</sub>
     </td>
   </tr>
@@ -38,21 +38,21 @@
 ## 安装
 
 ```bash
-npm install -g palmux
-palmux                    # 首次运行生成 ~/.config/palmux/config.json(含访问 token),并打印访问链接
-palmux install-service    # 可选:生成 systemd user unit 常驻
+npm install -g tapmux
+tapmux                    # 首次运行生成 ~/.config/tapmux/config.json(含访问 token),并打印访问链接
+tapmux install-service    # 可选:生成 systemd user unit 常驻
 ```
 
 或从源码:
 
 ```bash
-git clone https://github.com/coderdailyone/palmux.git && cd palmux
+git clone https://github.com/coderdailyone/tapmux.git && cd tapmux
 npm install && npm start
 ```
 
 手机与电脑同一局域网时,直接打开打印出的链接。端口/绑定地址/上传目录/保留天数/claude 启动命令等见生成的 config.json。
 
-推荐的 `~/.tmux.conf`(palmux 对纳管会话会自动强制关闭备用屏,全局配置是兜底):
+推荐的 `~/.tmux.conf`(tapmux 对纳管会话会自动强制关闭备用屏,全局配置是兜底):
 
 ```tmux
 set -g mouse on
@@ -63,11 +63,11 @@ set -g alternate-screen off    # Claude Code 输出进历史,滚动才有内容�
 
 ## 公网访问
 
-palmux 只监听 HTTP,公网暴露请放在你自己的反向代理(TLS)之后;机器在 NAT 内时配合 frp 等反向隧道使用。要点:
+tapmux 只监听 HTTP,公网暴露请放在你自己的反向代理(TLS)之后;机器在 NAT 内时配合 frp 等反向隧道使用。要点:
 
 - WebSocket 需要 `Upgrade/Connection` 头与足够长的 `proxy_read_timeout`(应用层自带 30s 心跳)
 - 上传需要 `client_max_body_size ≥ 12m`
-- palmux 只信任来自 127.0.0.1 的 `X-Forwarded-For`
+- tapmux 只信任来自 127.0.0.1 的 `X-Forwarded-For`
 
 **安全底线:这个网页等于机器的 shell,token 按 SSH 私钥对待,公网必须 TLS。** 应用层自带:token 恒时比较、失败退避封禁、Origin 校验、按键与 MIME 白名单、上传目录结构性防穿越。泄露 token 时改 config.json 并重启服务即可全部作废。
 

@@ -1,5 +1,5 @@
 {
-  "name": "palmux",
+  "name": "tapmux",
   "version": "0.1.1",
   "description": "Operate tmux / Claude Code from your phone browser. 掌上 tmux —— 手机浏览器操作家里机器上的 Claude Code",
   "type": "module",
@@ -19,10 +19,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/coderdailyone/palmux.git"
+    "url": "https://github.com/coderdailyone/tapmux.git"
   },
   "bin": {
-    "palmux": "bin/palmux.js"
+    "tapmux": "bin/tapmux.js"
   },
   "files": [
     "bin/",

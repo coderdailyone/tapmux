@@ -1,7 +1,7 @@
 // 公网全链 WS 冒烟:node test/ws-public-smoke.mjs <wss-url> <session> <token> [basic]
 import WebSocket from 'ws';
 const [url, session, token, basic] = process.argv.slice(2);
-const headers = { cookie: `palmux_token=${token}` };
+const headers = { cookie: `tapmux_token=${token}` };
 if (basic) headers.authorization = `Basic ${Buffer.from(basic).toString('base64')}`;
 const ws = new WebSocket(`${url}/ws/attach?session=${session}&cols=100&rows=30`, { headers });
 let bytes = 0; const acc = [];

@@ -1,6 +1,6 @@
 {
-  "name": "palmux",
-  "short_name": "palmux",
+  "name": "tapmux",
+  "short_name": "tapmux",
   "description": "掌上 tmux / Claude Code",
   "start_url": "/",
   "display": "standalone",

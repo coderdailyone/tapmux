@@ -1,4 +1,4 @@
-/* palmux 前端:会话列表 + 终端(直敲/输入条双模式) */
+/* tapmux 前端:会话列表 + 终端(直敲/输入条双模式) */
 'use strict';
 
 const $ = (s) => document.querySelector(s);

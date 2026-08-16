@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 const token = process.argv[2];
-const ws = new WebSocket('ws://127.0.0.1:7802/ws/attach?session=palmux-smoke&cols=100&rows=30', {
-  headers: { cookie: `palmux_token=${token}`, origin: 'http://127.0.0.1:7802' },
+const ws = new WebSocket('ws://127.0.0.1:7802/ws/attach?session=tapmux-smoke&cols=100&rows=30', {
+  headers: { cookie: `tapmux_token=${token}`, origin: 'http://127.0.0.1:7802' },
 });
 let bytes = 0, echoed = false;
 const acc = [];

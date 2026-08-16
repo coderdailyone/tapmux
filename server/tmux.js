@@ -92,7 +92,7 @@ export async function killSession(name) {
 // 整段注入文本:load-buffer + paste-buffer(-p 尊重应用的括号粘贴模式)。
 // 可靠处理中文/多行/特殊字符,绕开逐键序列的一切坑。
 export async function sendText(name, text, { enter = false } = {}) {
-  const buf = `palmux-${crypto.randomBytes(4).toString('hex')}`;
+  const buf = `tapmux-${crypto.randomBytes(4).toString('hex')}`;
   await tmux(['load-buffer', '-b', buf, '-'], { input: text });
   await tmux(['paste-buffer', '-p', '-d', '-b', buf, '-t', `=${name}:`]);
   if (enter) {

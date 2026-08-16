@@ -228,7 +228,7 @@ const server = http.createServer(async (req, res) => {
     if (err.code === 'BAD_JSON') return sendJson(res, 400, { error: 'bad json' });
     if (err.code === 'BAD_TYPE') return sendJson(res, 415, { error: '只收 jpg/png/webp/gif 图片' });
     if (err.code === 'BAD_SIZE') return sendJson(res, 400, { error: '图片为空或超过 10MB' });
-    console.error(`[palmux] ${req.method} ${url.pathname} 失败:`, err.message);
+    console.error(`[tapmux] ${req.method} ${url.pathname} 失败:`, err.message);
     return sendJson(res, 500, { error: 'internal error' });
   }
 });
@@ -257,7 +257,7 @@ server.on('upgrade', (req, socket, head) => {
   const cols = Math.min(Math.max(parseInt(url.searchParams.get('cols'), 10) || 80, 10), 500);
   const rows = Math.min(Math.max(parseInt(url.searchParams.get('rows'), 10) || 24, 4), 300);
   wss.handleUpgrade(req, socket, head, (ws) => {
-    console.log(`[palmux] attach ${name} from ${clientIp(req)}`);
+    console.log(`[tapmux] attach ${name} from ${clientIp(req)}`);
     handleAttach(ws, name, { cols, rows });
   });
 });
@@ -267,9 +267,9 @@ setInterval(() => cleanupOldUploads(config.uploadDir, config.uploadRetentionDays
 
 server.listen(config.port, config.bind, () => {
   const ifaces = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);
-  console.log(`[palmux] listening on ${config.bind}:${config.port}`);
-  console.log(`[palmux] config: ${CONFIG_FILE}`);
+  console.log(`[tapmux] listening on ${config.bind}:${config.port}`);
+  console.log(`[tapmux] config: ${CONFIG_FILE}`);
   for (const i of ifaces) {
-    console.log(`[palmux] 访问入口: http://${i.address}:${config.port}/?token=${config.token}`);
+    console.log(`[tapmux] 访问入口: http://${i.address}:${config.port}/?token=${config.token}`);
   }
 });

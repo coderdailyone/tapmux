@@ -49,7 +49,7 @@ test('token 比较:恒时比较且拒绝非串', () => {
 });
 
 test('cookie 解析', () => {
-  assert.deepEqual(parseCookies('a=1; palmux_token=xyz'), { a: '1', palmux_token: 'xyz' });
+  assert.deepEqual(parseCookies('a=1; tapmux_token=xyz'), { a: '1', tapmux_token: 'xyz' });
   assert.deepEqual(parseCookies(undefined), {});
 });
 
@@ -83,7 +83,7 @@ test('卡片预览:滤 Claude UI 噪音,留正文末行,超长截断', () => {
 });
 
 test('上传落盘 + 只读回自己的目录 + 过期清理', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'palmux-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tapmux-test-'));
   const saved = saveImage(dir, Buffer.from([0xff, 0xd8, 0xff]), 'image/jpeg');
   assert.ok(saved.path.startsWith(dir));
   assert.match(saved.url, /^\/uploads\/\d{4}-\d{2}-\d{2}\/[a-f0-9]{12}\.jpg$/);

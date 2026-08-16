@@ -1,10 +1,10 @@
 [Unit]
-Description=palmux - phone-friendly web bridge for tmux / Claude Code
+Description=tapmux - phone-friendly web bridge for tmux / Claude Code
 After=network.target
 
 [Service]
-# %h = 你的家目录;如果仓库不在 ~/git_projects/palmux,改这一行
-ExecStart=/usr/bin/env node %h/git_projects/palmux/server/index.js
+# %h = 你的家目录;如果仓库不在 ~/git_projects/tapmux,改这一行
+ExecStart=/usr/bin/env node %h/git_projects/tapmux/server/index.js
 Restart=always
 RestartSec=3
 Environment=NODE_ENV=production
