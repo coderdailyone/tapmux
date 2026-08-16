@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="palmux">
+<meta name="theme-color" content="#0b0f14">
+<title>palmux</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- 会话列表视图 -->
+<div id="view-list" class="view">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">❯</span> palmux <span class="build">b10</span></div>
+    <div class="topbar-actions">
+      <button id="btn-refresh" class="icon-btn" title="探测">↻</button>
+      <button id="btn-new" class="icon-btn accent" title="新建">＋</button>
+    </div>
+  </header>
+
+  <div id="new-panel" class="panel hidden">
+    <input id="new-name" type="text" placeholder="会话名(字母数字._-)" autocapitalize="off" autocorrect="off">
+    <label class="check"><input id="new-claude" type="checkbox" checked> 启动 Claude Code</label>
+    <div class="panel-actions">
+      <button id="new-cancel" class="btn">取消</button>
+      <button id="new-create" class="btn primary">创建</button>
+    </div>
+  </div>
+
+  <main id="list-main">
+    <div id="list-status" class="list-status">加载中…</div>
+    <section id="sec-managed" class="hidden">
+      <h2>我的会话</h2>
+      <div id="cards-managed"></div>
+    </section>
+    <section id="sec-wild" class="hidden">
+      <h2>机器上发现的其他会话</h2>
+      <div id="cards-wild"></div>
+    </section>
+    <section id="sec-dead" class="hidden">
+      <h2>已失效</h2>
+      <div id="cards-dead"></div>
+    </section>
+  </main>
+</div>
+
+<!-- 终端视图 -->
+<div id="view-term" class="view hidden">
+  <header class="topbar slim">
+    <button id="btn-back" class="icon-btn">‹</button>
+    <div id="term-title" class="term-title">—</div>
+    <div id="conn-dot" class="dot off"></div>
+  </header>
+
+  <div id="term-wrap">
+    <div id="term"></div>
+    <div class="scrollrail">
+      <button id="rail-up" class="rail">▲</button>
+      <button id="rail-down" class="rail">▼</button>
+    </div>
+  </div>
+
+  <!-- 直敲模式:快捷键条 -->
+  <div id="quickbar" class="bottombar hidden">
+    <button data-act="mode" class="qk wide">✏️ 输入条</button>
+    <button data-key="Escape" class="qk">Esc</button>
+    <button data-key="Enter" class="qk">⏎</button>
+    <button data-key="Tab" class="qk">Tab</button>
+    <button data-act="ctrl" id="qk-ctrl" class="qk">⌃</button>
+    <button data-key="Up" class="qk">↑</button>
+    <button data-key="Down" class="qk">↓</button>
+    <button data-key="Left" class="qk">←</button>
+    <button data-key="Right" class="qk">→</button>
+    <button data-key="C-c" class="qk">^C</button>
+    <button data-act="scroll" class="qk">回滚</button>
+    <button data-act="font-" class="qk">A−</button>
+    <button data-act="font+" class="qk">A＋</button>
+    <button data-act="wake" id="qk-wake" class="qk">☀︎</button>
+  </div>
+
+  <!-- 输入条模式:原生输入框,中文舒服打,整段注入 -->
+  <div id="inputbar" class="bottombar col">
+    <div id="chips" class="chips hidden"></div>
+    <div class="inputrow">
+      <button data-act="mode" class="qk">⌨️</button>
+      <button id="btn-photo" class="qk">📷</button>
+      <button id="btn-enter" class="qk" title="发一个回车(确认/继续)">⏎</button>
+      <textarea id="compose" rows="1" placeholder="给这个会话发消息…" autocapitalize="off" autocorrect="off"></textarea>
+      <button id="btn-send" class="btn primary send">发送</button>
+    </div>
+    <input id="file-input" type="file" accept="image/*" multiple class="hidden">
+  </div>
+</div>
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

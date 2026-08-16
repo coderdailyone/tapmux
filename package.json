@@ -1,0 +1,43 @@
+{
+  "name": "palmux",
+  "version": "0.1.0",
+  "description": "Operate tmux / Claude Code from your phone browser. 掌上 tmux —— 手机浏览器操作家里机器上的 Claude Code",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.1.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "ws": "^8.18.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coderdailyone/palmux.git"
+  },
+  "bin": {
+    "palmux": "bin/palmux.js"
+  },
+  "files": [
+    "bin/",
+    "server/",
+    "public/",
+    "systemd/"
+  ],
+  "keywords": [
+    "tmux",
+    "claude-code",
+    "mobile",
+    "terminal",
+    "xterm",
+    "pwa",
+    "remote",
+    "websocket"
+  ]
+}

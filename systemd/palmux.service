@@ -1,0 +1,17 @@
+[Unit]
+Description=palmux - phone-friendly web bridge for tmux / Claude Code
+After=network.target
+
+[Service]
+# %h = 你的家目录;如果仓库不在 ~/git_projects/palmux,改这一行
+ExecStart=/usr/bin/env node %h/git_projects/palmux/server/index.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+# 铁律:桥接服务死亡绝不能连坐 tmux 服务器。tmux 可能是被本服务的 API 调用
+# 按需拉起的,落在同一 cgroup;默认 KillMode 会在停止/崩溃时清掉整个进程组,
+# 等于"唯一状态层"被自己人杀死(真实发生过)。KillMode=process 只杀主进程。
+KillMode=process
+
+[Install]
+WantedBy=default.target
