@@ -16,7 +16,7 @@ import {
   saveImage, resolveServable, contentTypeFor, cleanupOldUploads, MAX_UPLOAD_BYTES,
 } from './uploads.js';
 import { handleAttach } from './attach.js';
-import { previewFromCapture, detectClaudeState } from './preview.js';
+import { previewFromCapture, detectClaudeState, contentFingerprint } from './preview.js';
 import { Notifier } from './notify.js';
 import { startAgent } from './agent.js';
 
@@ -268,7 +268,7 @@ server.on('upgrade', (req, socket, head) => {
 cleanupOldUploads(config.uploadDir, config.uploadRetentionDays);
 setInterval(() => cleanupOldUploads(config.uploadDir, config.uploadRetentionDays), 24 * 3600 * 1000).unref();
 
-const notifier = new Notifier(config, { probe, capture: capturePane, detect: detectClaudeState });
+const notifier = new Notifier(config, { probe, capture: capturePane, detect: detectClaudeState, fingerprint: contentFingerprint });
 if (notifier.enabled()) {
   setInterval(() => notifier.tick(), 15_000).unref();
   console.log('[tapmux] Telegram 通知巡检已启用(15s 一拍)');

@@ -1,6 +1,6 @@
 {
   "name": "tapmux",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Operate tmux / Claude Code from your phone browser. 掌上 tmux —— 手机浏览器操作家里机器上的 Claude Code",
   "type": "module",
   "scripts": {

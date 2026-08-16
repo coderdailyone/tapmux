@@ -7,7 +7,15 @@ import path from 'node:path';
 import { validSessionName, validKeys } from '../server/tmux.js';
 import { tokensEqual, parseCookies } from '../server/auth.js';
 import { extForMime, saveImage, resolveServable, cleanupOldUploads } from '../server/uploads.js';
-import { previewFromCapture, detectClaudeState } from '../server/preview.js';
+import { previewFromCapture, detectClaudeState, contentFingerprint } from '../server/preview.js';
+
+test('内容指纹:时钟/状态条自变不改指纹,正文变则变', () => {
+  const a = '正文一样\n  [Fable 5] │ user │ ⏱️ 24m\n  Usage ██ 5% (resets in 4h 12m)\n✽ Skedaddling… (3s · ↓ 88 tokens)';
+  const b = '正文一样\n  [Fable 5] │ user │ ⏱️ 25m\n  Usage ██ 6% (resets in 4h 11m)\n· Scampering…';
+  assert.equal(contentFingerprint(a), contentFingerprint(b));
+  const c = '正文多了一行\n正文一样\n  [Fable 5] │ user │ ⏱️ 25m';
+  assert.notEqual(contentFingerprint(a), contentFingerprint(c));
+});
 import { decideNotification } from '../server/notify.js';
 import { T, encode, decode, encodeJson, parseJson, cleanHeaders } from '../server/relay/protocol.js';
 import { Registry } from '../server/relay/registry.js';
@@ -54,6 +62,11 @@ test('通知决策:等确认必发,完工须干满时长,其余不扰', () => {
 test('Claude 状态感知:等确认 > 干活中 > 空闲', () => {
   assert.equal(detectClaudeState('✻ Crunching… (esc to interrupt)'), 'working');
   assert.equal(detectClaudeState('✻ Brewed for 46s\n  tokens · esc to interrupt'), 'working');
+  // 新版旋转器形态(真机 2026-08 抓取)
+  assert.equal(detectClaudeState('✽ Skedaddling… (3s · ↓ 88 tokens)'), 'working');
+  assert.equal(detectClaudeState('✻ Reticulating… (2m 14s · ↑ 1.2k tokens)'), 'working');
+  // 完工残留行绝不能误判为干活中
+  assert.equal(detectClaudeState('✻ Churned for 30s\n❯ '), 'idle');
   assert.equal(detectClaudeState('Do you want to create test.txt?\n❯ 1. Yes\n  2. No'), 'waiting');
   assert.equal(detectClaudeState('   Enter to confirm · Esc to cancel'), 'waiting');
   // 对话框与旋转器同屏时,等确认优先

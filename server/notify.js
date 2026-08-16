@@ -17,7 +17,8 @@ export function decideNotification({ prevState, nextState, workingMs, minWorking
 }
 
 export class Notifier {
-  constructor(config, { probe, capture, detect, log = console }) {
+  constructor(config, { probe, capture, detect, fingerprint, log = console }) {
+    this.fingerprint = fingerprint;
     this.cfg = config.notify || {};
     this.baseUrl = config.publicUrl || '';
     this.probe = probe;       // 取纳管会话清单
@@ -54,16 +55,31 @@ export class Notifier {
   }
 
   async observe(name) {
-    const state = this.detect(await this.capture(name));
+    const text = await this.capture(name);
+    let state = this.detect(text);
     const now = Date.now();
+    // 画面在动 = 在干活:UI 文案会变,"正文两拍不同"这个机制不会
+    const fp = this.fingerprint ? this.fingerprint(text) : null;
+    const prevFp = this.sessions.get(name)?.fp;
+    if (fp !== null) {
+      const cur0 = this.sessions.get(name);
+      if (cur0) cur0.fp = fp;
+      if (state === 'idle' && prevFp !== undefined && fp !== prevFp) state = 'working';
+    }
+    if (this.cfg.debug) {
+      const cur = this.sessions.get(name);
+      const spin = text.split('\n').find((l) => /…/.test(l)) || '';
+      this.log.log(`[tapmux][notify-debug] ${name} 看到=${state} 文长=${text.length} 旋转行=${JSON.stringify(spin.slice(0, 60))} 已确认=${cur?.state ?? '首见'}`);
+    }
     let s = this.sessions.get(name);
     if (!s) {
       // 首见:静默登记,不为存量状态发通知
-      this.sessions.set(name, { state, since: now, pending: state, confirm: 0 });
+      this.sessions.set(name, { state, since: now, pending: state, pendingSince: now, confirm: 0, fp });
       return;
     }
     if (state !== s.pending) {
       s.pending = state;
+      s.pendingSince = now; // 新状态首见时刻:时长从这里起算,消除确认延迟的计量损耗
       s.confirm = 1;
     } else if (state !== s.state) {
       s.confirm += 1;
@@ -74,11 +90,11 @@ export class Notifier {
       const n = decideNotification({
         prevState: s.state,
         nextState: state,
-        workingMs: now - s.since,
-        minWorkingMs: (this.cfg.minWorkingSeconds ?? 60) * 1000,
+        workingMs: s.pendingSince - s.since,
+        minWorkingMs: (this.cfg.minWorkingSeconds ?? 30) * 1000,
       });
       s.state = state;
-      s.since = now;
+      s.since = s.pendingSince;
       s.confirm = 0;
       if (n) await this.send(name, n);
     }
