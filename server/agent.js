@@ -1,7 +1,10 @@
 import http from 'node:http';
+import { createRequire } from 'node:module';
 import { WebSocket } from 'ws';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { T, encode, encodeJson, decode, parseJson, cleanHeaders } from './relay/protocol.js';
+
+const VERSION = createRequire(import.meta.url)('../package.json').version;
 
 // relay 接入 agent:主动外连 relay,把隧道里的请求回环转发给本机桥接服务。
 // 复用本机的全部鉴权与逻辑——agent 对业务零感知,只搬字节。
@@ -37,7 +40,7 @@ export function startAgent(config, { log = console, internalSecret = '' } = {}) 
   function connect() {
     const url = `${r.url.replace(/\/$/, '')}/relay/agent`;
     const opts = {
-      headers: { 'x-device-name': r.deviceName, 'x-device-token': r.deviceToken },
+      headers: { 'x-device-name': r.deviceName, 'x-device-token': r.deviceToken, 'x-tapmux-version': VERSION },
       handshakeTimeout: 15_000,
     };
     if (r.proxyUrl) opts.agent = new HttpsProxyAgent(r.proxyUrl);

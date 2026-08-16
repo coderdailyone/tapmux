@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>tapmux · 登录</title>
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: #000; color: #f2f2f7;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+.wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 24px; gap: 0; }
+.mark { font-family: ui-monospace, Menlo, monospace; font-size: 44px; font-weight: 800;
+  color: #34d399; line-height: 1; }
+h1 { font-size: 28px; font-weight: 800; letter-spacing: .3px; margin: 14px 0 6px; }
+.sub { color: #8e8e93; font-size: 14px; margin: 0 0 34px; }
+form { width: 100%; max-width: 400px; }
+input {
+  width: 100%; background: #1c1c1e; border: 1px solid rgba(84,84,88,.5); border-radius: 14px;
+  color: #f2f2f7; font-size: 17px; padding: 15px 16px; outline: none;
+  transition: border-color .18s ease;
+}
+input:focus { border-color: #34d399; }
+button {
+  width: 100%; margin-top: 14px; background: #34d399; color: #04281a; border: 0;
+  border-radius: 14px; padding: 15px; font-size: 17px; font-weight: 700;
+  transition: transform .1s ease, opacity .15s ease;
+}
+button:active { transform: scale(.97); opacity: .85; }
+.hint { color: #636366; font-size: 12.5px; margin-top: 22px; text-align: center; line-height: 1.6; }
+@media (prefers-reduced-motion: no-preference) {
+  .wrap > * { animation: rise .4s cubic-bezier(.2,.8,.3,1) backwards; }
+  form { animation-delay: .06s; } .hint { animation-delay: .12s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="mark" align="center">❯</div>
+    <h1 align="center">tapmux</h1>
+    <p class="sub" align="center">掌上 tmux · 随时随地指挥 Claude Code</p>
+  </div>
+  <form method="GET" action="/relay/login">
+    <input name="token" placeholder="用户 token" autocapitalize="off" autocorrect="off" autocomplete="off" required>
+    <button>登录</button>
+  </form>
+  <p class="hint">token 由管理员发放,按 SSH 私钥对待<br>登录后 180 天内免输</p>
+</div>
+</body>
+</html>

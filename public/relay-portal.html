@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="tapmux">
+<meta name="theme-color" content="#000000">
+<title>tapmux</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #000; --card: #1c1c1e; --card2: #2c2c2e; --fg: #f2f2f7; --dim: #8e8e93;
+  --hair: rgba(84,84,88,.42); --accent: #34d399; --red: #ff453a; --amber: #ffd60a;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+body { padding-bottom: calc(env(safe-area-inset-bottom) + 40px); }
+
+.bar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 12px) 20px 10px;
+  background: rgba(0,0,0,.78); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.mark { color: var(--accent); font-family: ui-monospace, Menlo, monospace; font-weight: 800; font-size: 17px; }
+.brand { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
+.bar .sp { flex: 1; }
+.userchip { color: var(--dim); font-size: 13px; }
+.logout { color: var(--dim); font-size: 13px; text-decoration: none; padding: 6px 0 6px 10px; }
+
+h1 { font-size: 34px; font-weight: 800; letter-spacing: .3px; margin: 10px 20px 4px; }
+
+.section { margin: 26px 16px 0; }
+.sec-label { color: var(--dim); font-size: 13px; font-weight: 600; letter-spacing: .4px;
+  text-transform: uppercase; margin: 0 6px 8px; }
+.group { background: var(--card); border-radius: 16px; overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  border: 0; background: none; width: 100%; text-align: left; color: var(--fg);
+  font: inherit; text-decoration: none; position: relative;
+  transition: background-color .15s ease;
+}
+.row + .row::before { content: ""; position: absolute; left: 44px; right: 0; top: 0;
+  height: 1px; background: var(--hair); }
+.row:active { background: var(--card2); }
+.dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.on { background: var(--accent); box-shadow: 0 0 8px rgba(52,211,153,.6); }
+.off { background: var(--red); }
+.row .main { flex: 1; min-width: 0; }
+.row .title { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.row .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
+.tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.tag.up { color: #3b2f00; background: var(--amber); }
+.tag.adm { color: #04281a; background: var(--accent); }
+.chev { color: #48484a; font-size: 20px; font-weight: 600; flex: none; }
+.more {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0;
+  background: var(--card2); color: var(--dim); font-size: 17px; line-height: 1;
+  transition: transform .1s ease;
+}
+.more:active { transform: scale(.9); }
+.action { color: var(--accent); font-size: 17px; font-weight: 600; }
+.empty { color: var(--dim); font-size: 14px; padding: 18px 16px; }
+
+/* 底部动作板 */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 30;
+  opacity: 0; pointer-events: none; transition: opacity .22s ease; }
+.scrim.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 8px);
+  z-index: 31; transform: translateY(110%); transition: transform .28s cubic-bezier(.2,.8,.3,1);
+}
+.sheet.show { transform: none; }
+.sheet .pane { background: #232325; border-radius: 18px; overflow: hidden;
+  backdrop-filter: blur(20px); }
+.sheet .item {
+  display: block; width: 100%; padding: 16px; border: 0; background: none;
+  color: var(--accent); font-size: 18px; font-weight: 500; text-align: center; font-family: inherit;
+}
+.sheet .item + .item { border-top: 1px solid var(--hair); }
+.sheet .item.danger { color: var(--red); }
+.sheet .item:active { background: var(--card2); }
+.sheet .cancel { margin-top: 8px; background: #232325; border-radius: 18px; color: var(--fg); font-weight: 700; }
+.sheet .body { padding: 20px 18px; }
+.sheet h3 { margin: 0 0 6px; font-size: 18px; }
+.sheet .note { color: var(--dim); font-size: 13px; line-height: 1.6; margin: 0 0 14px; }
+.mono {
+  font-family: ui-monospace, Menlo, monospace; font-size: 13.5px; line-height: 1.7;
+  background: #0d0d0f; border: 1px solid var(--hair); border-radius: 12px;
+  padding: 12px 14px; word-break: break-all; white-space: pre-wrap; user-select: all; -webkit-user-select: all;
+}
+.sheet input {
+  width: 100%; background: #0d0d0f; border: 1px solid var(--hair); border-radius: 12px;
+  color: var(--fg); font-size: 17px; padding: 13px 14px; outline: none; font-family: inherit;
+}
+.sheet input:focus { border-color: var(--accent); }
+.btn {
+  width: 100%; margin-top: 12px; background: var(--accent); color: #04281a; border: 0;
+  border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; font-family: inherit;
+  transition: transform .1s ease;
+}
+.btn:active { transform: scale(.97); }
+.btn.ghost { background: var(--card2); color: var(--fg); }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 90px);
+  transform: translateX(-50%); z-index: 40;
+  background: rgba(44,44,46,.96); border-radius: 12px; padding: 11px 18px;
+  font-size: 14.5px; max-width: 86vw;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .section { animation: rise .35s cubic-bezier(.2,.8,.3,1) backwards; }
+  .section:nth-of-type(2) { animation-delay: .05s; }
+  .section:nth-of-type(3) { animation-delay: .1s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  .toast { animation: pop .2s cubic-bezier(.2,.8,.3,1); }
+  @keyframes pop { from { opacity: 0; transform: translate(-50%, 8px); } }
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="mark">❯</span><span class="brand">tapmux</span>
+  <span class="sp"></span>
+  <span class="userchip" id="who"></span>
+  <a class="logout" href="/relay/logout">退出</a>
+</div>
+<h1>机器</h1>
+
+<div class="section">
+  <div class="sec-label">我的机器</div>
+  <div class="group" id="devices"><div class="empty">加载中…</div></div>
+</div>
+
+<div class="section">
+  <div class="sec-label">接入</div>
+  <div class="group">
+    <button class="row" id="btn-invite"><span class="action">＋ 生成邀请码,接入新机器</span></button>
+  </div>
+</div>
+
+<div class="section" id="sec-users" hidden>
+  <div class="sec-label">用户 · 管理员</div>
+  <div class="group" id="users"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+let me = { user: '', admin: false, relayVersion: '' };
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: opts.body ? { 'content-type': 'application/json' } : {},
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { location.href = '/relay/login'; throw new Error('未登录'); }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+}
+
+/* ---- 底部动作板 ---- */
+function openSheet(html) {
+  $('#sheet').innerHTML = html;
+  requestAnimationFrame(() => { $('#scrim').classList.add('show'); $('#sheet').classList.add('show'); });
+}
+function closeSheet() { $('#scrim').classList.remove('show'); $('#sheet').classList.remove('show'); }
+$('#scrim').onclick = closeSheet;
+
+function actionSheet(items) {
+  openSheet(`<div class="pane">${items.map((it, i) =>
+    `<button class="item ${it.danger ? 'danger' : ''}" data-i="${i}">${it.label}</button>`).join('')}</div>
+    <button class="item cancel" onclick="closeSheet()">取消</button>`);
+  $('#sheet').querySelectorAll('[data-i]').forEach((b) => {
+    b.onclick = () => { closeSheet(); items[Number(b.dataset.i)].fn(); };
+  });
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function rel(ts) {
+  if (!ts) return '从未在线';
+  const s = (Date.now() - ts) / 1000;
+  if (s < 90) return '刚刚在线';
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前在线`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前在线`;
+  return `${Math.floor(s / 86400)} 天前在线`;
+}
+
+/* ---- 设备 ---- */
+async function loadDevices() {
+  const { devices } = await api('/relay/api/devices');
+  const box = $('#devices');
+  if (!devices.length) { box.innerHTML = '<div class="empty">名下还没有机器,生成邀请码接一台吧。</div>'; return; }
+  box.innerHTML = '';
+  for (const d of devices.sort((a, b) => Number(b.online) - Number(a.online))) {
+    const upgradable = me.relayVersion && d.version !== me.relayVersion; // 版本未知(旧 agent 不上报)也算可升级
+    const row = document.createElement('a');
+    row.className = 'row';
+    row.href = d.online ? `/d/${encodeURIComponent(d.name)}/` : 'javascript:void 0';
+    row.innerHTML = `
+      <span class="dot ${d.online ? 'on' : 'off'}"></span>
+      <span class="main">
+        <span class="title">${esc(d.name)}${upgradable ? '<span class="tag up">可升级</span>' : ''}${me.admin && d.owner !== me.user ? `<span class="tag adm">${esc(d.owner || '?')}</span>` : ''}</span>
+        <span class="sub">${d.online ? '在线' : rel(d.lastSeen)}${d.version ? ` · v${esc(d.version)}` : ''}</span>
+      </span>
+      <button class="more" data-n="${esc(d.name)}">⋯</button>
+      <span class="chev">›</span>`;
+    row.querySelector('.more').onclick = (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      actionSheet([
+        { label: '打开', fn: () => { location.href = `/d/${encodeURIComponent(d.name)}/`; } },
+        { label: `吊销 ${d.name}`, danger: true, fn: () => confirmRevokeDevice(d.name) },
+      ]);
+    };
+    box.appendChild(row);
+  }
+}
+
+function confirmRevokeDevice(name) {
+  openSheet(`<div class="pane"><div class="body">
+    <h3>吊销 ${esc(name)}?</h3>
+    <p class="note">立即断开它的隧道并删除注册;那台机器上的 tmux 与数据不受影响,重新用邀请码可再接入。</p>
+    <button class="btn" style="background:var(--red);color:#fff" id="do-revoke">确认吊销</button>
+    <button class="btn ghost" onclick="closeSheet()">取消</button>
+  </div></div>`);
+  $('#do-revoke').onclick = async () => {
+    try { await api(`/relay/api/devices/${encodeURIComponent(name)}`, { method: 'DELETE' }); closeSheet(); toast('已吊销'); refresh(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
+/* ---- 邀请码 ---- */
+$('#btn-invite').onclick = async () => {
+  try {
+    const { code } = await api('/relay/api/invites', { method: 'POST' });
+    const cmd = `npm i -g tapmux\ntapmux relay-join ${location.origin} ${code} <设备名>\ntapmux install-service && systemctl --user enable --now tapmux`;
+    openSheet(`<div class="pane"><div class="body">
+      <h3>邀请码已生成</h3>
+      <p class="note">单次有效,注册的机器自动挂到你名下。在新机器上执行:</p>
+      <div class="mono" id="inv-cmd">${esc(cmd)}</div>
+      <button class="btn" id="copy-inv">复制命令</button>
+      <button class="btn ghost" onclick="closeSheet()">完成</button>
+    </div></div>`);
+    $('#copy-inv').onclick = async () => {
+      try { await navigator.clipboard.writeText(cmd); toast('已复制'); }
+      catch { toast('复制失败,长按文本手动复制'); }
+    };
+  } catch (e) { toast(e.message); }
+};
+
+/* ---- 用户(管理员) ---- */
+async function loadUsers() {
+  if (!me.admin) return;
+  $('#sec-users').hidden = false;
+  const { users } = await api('/relay/api/users');
+  const box = $('#users');
+  box.innerHTML = '';
+  for (const u of users) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <span class="main">
+        <span class="title">${esc(u.name)}${u.admin ? '<span class="tag adm">管理员</span>' : ''}</span>
+        <span class="sub">${u.devices.length} 台机器${u.devices.length ? ' · ' + u.devices.map(esc).join('、') : ''}</span>
+      </span>
+      ${u.name === me.user ? '' : `<button class="more" data-u="${esc(u.name)}">⋯</button>`}`;
+    const btn = row.querySelector('.more');
+    if (btn) btn.onclick = () => actionSheet([
+      { label: `吊销用户 ${u.name}`, danger: true, fn: async () => {
+        try { await api(`/relay/api/users/${encodeURIComponent(u.name)}`, { method: 'DELETE' }); toast('已吊销'); refresh(); }
+        catch (e) { toast(e.message); }
+      } },
+    ]);
+    box.appendChild(row);
+  }
+  const add = document.createElement('button');
+  add.className = 'row';
+  add.innerHTML = '<span class="action">＋ 新用户</span>';
+  add.onclick = () => {
+    openSheet(`<div class="pane"><div class="body">
+      <h3>新用户</h3>
+      <p class="note">小写字母数字连字符,24 字以内</p>
+      <input id="nu-name" placeholder="用户名" autocapitalize="off" autocorrect="off">
+      <button class="btn" id="nu-go">创建</button>
+      <button class="btn ghost" onclick="closeSheet()">取消</button>
+    </div></div>`);
+    $('#nu-name').focus();
+    $('#nu-go').onclick = async () => {
+      try {
+        const out = await api('/relay/api/users', { method: 'POST', body: { name: $('#nu-name').value.trim() } });
+        const link = `${location.origin}/relay/login?token=${out.userToken}`;
+        openSheet(`<div class="pane"><div class="body">
+          <h3>${esc(out.name)} 已创建</h3>
+          <p class="note">⚠️ 用户 token <b>仅显示这一次</b>,服务器只存哈希。把登录链接发给对方:</p>
+          <div class="mono">${esc(link)}</div>
+          <button class="btn" id="copy-u">复制登录链接</button>
+          <button class="btn ghost" onclick="closeSheet()">完成</button>
+        </div></div>`);
+        $('#copy-u').onclick = async () => {
+          try { await navigator.clipboard.writeText(link); toast('已复制'); } catch { toast('复制失败,长按手动复制'); }
+        };
+        refresh();
+      } catch (e) { toast(e.message); }
+    };
+  };
+  box.appendChild(add);
+}
+
+async function refresh() {
+  try { await loadDevices(); await loadUsers(); }
+  catch (e) { toast(e.message); }
+}
+
+(async () => {
+  try {
+    me = await api('/relay/api/me');
+    $('#who').textContent = me.user;
+    await refresh();
+    setInterval(() => { if (document.visibilityState === 'visible') loadDevices().catch(() => {}); }, 15000);
+  } catch (e) { /* 401 已跳登录 */ }
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,11 @@ const BASE = location.pathname.endsWith('/')
   : location.pathname.replace(/[^/]*$/, '');
 const u = (p) => BASE + String(p).replace(/^\//, '');
 
+// 经 relay 挂载时,列表页给一个回门户的按钮(脚本在 body 尾部,DOM 已就绪)
+if (BASE.startsWith('/d/')) {
+  document.querySelector('#portal-back')?.classList.remove('hidden');
+}
+
 const state = {
   cur: null,          // 当前打开的会话名
   term: null,

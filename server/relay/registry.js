@@ -51,6 +51,17 @@ export class Registry {
     return null;
   }
 
+  isAdmin(name) {
+    return Boolean(this.data.users[name]?.admin);
+  }
+
+  promote(name, on = true) {
+    if (!this.data.users[name]) return false;
+    this.data.users[name].admin = on;
+    this.save();
+    return true;
+  }
+
   revokeUser(name) {
     if (!this.data.users[name]) return false;
     delete this.data.users[name];
@@ -116,9 +127,10 @@ export class Registry {
     return h.length === want.length && crypto.timingSafeEqual(h, want);
   }
 
-  touch(name) {
+  touch(name, version) {
     if (this.data.devices[name]) {
       this.data.devices[name].lastSeen = Date.now();
+      if (version) this.data.devices[name].version = version;
       this.save();
     }
   }

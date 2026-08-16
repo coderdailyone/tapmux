@@ -7,6 +7,9 @@
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import fsMod from 'node:fs';
+import { createRequire } from 'node:module';
+const RELAY_VERSION = createRequire(import.meta.url)('../package.json').version;
 import { WebSocketServer, WebSocket } from 'ws';
 import { Registry } from '../server/relay/registry.js';
 import { T, encode, encodeJson, decode, parseJson, cleanHeaders } from '../server/relay/protocol.js';
@@ -32,6 +35,9 @@ if (cmd === 'user-add') {
   process.exit(0);
 } else if (cmd === 'user-revoke') {
   console.log(registry.revokeUser(process.argv[3]) ? '已吊销(名下机器保留,可 claim 给别人)' : '用户不存在');
+  process.exit(0);
+} else if (cmd === 'promote') {
+  console.log(registry.promote(process.argv[3]) ? '已设为管理员' : '用户不存在');
   process.exit(0);
 } else if (cmd === 'claim') {
   console.log(registry.claimDevice(process.argv[3], process.argv[4]) ? '已归属' : '设备或用户不存在');
@@ -93,6 +99,17 @@ function sendHtml(res, code, body, headers = {}) {
   res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;padding:32px 20px;background:#0b0f14;color:#e8eef5;font-family:-apple-system,'PingFang SC',sans-serif">${body}`);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const JSON_CT = { 'content-type': 'application/json; charset=utf-8' };
+const PORTAL_DIR = new URL('../public/', import.meta.url).pathname;
+function servePortalFile(res, file) {
+  try {
+    const b = fsMod.readFileSync(path.join(PORTAL_DIR, file));
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+    res.end(b);
+  } catch {
+    sendHtml(res, 500, '门户文件缺失');
+  }
+}
 
 // ---- 在线设备表:name -> { ws, streams: Map<sid, handler>, nextSid } ----
 const online = new Map();
@@ -171,12 +188,7 @@ const server = http.createServer(async (req, res) => {
       }
       fail(ip);
     }
-    sendHtml(res, 401, `<h2 style="margin:0 0 16px">tapmux</h2>
-      <form method="GET" action="/relay/login">
-      <input name="token" placeholder="用户 token" autocapitalize="off" autocorrect="off"
-        style="width:100%;max-width:420px;box-sizing:border-box;background:#161e28;border:1px solid #223041;border-radius:12px;color:#e8eef5;font-size:16px;padding:12px">
-      <button style="margin-top:12px;display:block;background:#34d399;color:#06281c;border:0;border-radius:12px;padding:12px 20px;font-size:15px;font-weight:700">登录</button>
-      </form>`);
+    servePortalFile(res, 'relay-login.html');
     return;
   }
 
@@ -186,19 +198,67 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/relay/' || url.pathname === '/relay') {
-    const user = userFromReq(req);
-    if (!user) { sendHtml(res, 302, '', { location: '/relay/login' }); return; }
-    const mine = registry.list().filter((d) => d.owner === user);
-    const rows = mine.map((d) => {
-      const on = online.has(d.name);
-      return `<a href="/d/${esc(d.name)}/" style="display:flex;align-items:center;gap:12px;background:#161e28;border:1px solid #223041;border-radius:16px;padding:16px;margin-bottom:10px;color:#e8eef5;text-decoration:none;max-width:480px">
-        <span style="width:10px;height:10px;border-radius:50%;background:${on ? '#34d399' : '#f87171'}"></span>
-        <b style="font-size:17px">${esc(d.name)}</b>
-        <span style="color:#8b9bab;font-size:13px;margin-left:auto">${on ? '在线' : '离线'}</span></a>`;
-    }).join('') || '<p style="color:#8b9bab">名下还没有机器,用邀请码接一台吧。</p>';
-    sendHtml(res, 200, `<h2 style="margin:0 0 4px"><span style="color:#34d399;font-family:ui-monospace,monospace">❯</span> 我的机器</h2>
-      <p style="color:#8b9bab;margin:0 0 20px;font-size:13px">${esc(user)} · <a href="/relay/logout" style="color:#8b9bab">退出</a></p>${rows}`);
+    if (!userFromReq(req)) { sendHtml(res, 302, '', { location: '/relay/login' }); return; }
+    servePortalFile(res, 'relay-portal.html');
     return;
+  }
+
+  // ---- 管理 API(登录即用;写操作须同源;用户管理须管理员) ----
+  if (url.pathname.startsWith('/relay/api/')) {
+    const user = userFromReq(req);
+    if (!user) { res.writeHead(401, JSON_CT); res.end('{"error":"unauthorized"}'); return; }
+    if (req.method !== 'GET' && req.headers.origin) {
+      let ok = false;
+      try { ok = new URL(req.headers.origin).host === req.headers.host; } catch {}
+      if (!ok) { res.writeHead(403, JSON_CT); res.end('{"error":"bad origin"}'); return; }
+    }
+    const admin = registry.isAdmin(user);
+    const send = (code, obj) => { res.writeHead(code, JSON_CT); res.end(JSON.stringify(obj)); };
+    const parts = url.pathname.split('/').filter(Boolean); // ['relay','api',...]
+
+    if (req.method === 'GET' && parts[2] === 'me') return send(200, { user, admin, relayVersion: RELAY_VERSION });
+
+    if (req.method === 'GET' && parts[2] === 'devices') {
+      const all = registry.list().filter((d) => admin || d.owner === user);
+      return send(200, {
+        devices: all.map((d) => ({
+          name: d.name,
+          owner: d.owner,
+          online: online.has(d.name),
+          version: online.get(d.name)?.version || d.version || '',
+          lastSeen: d.lastSeen,
+        })),
+      });
+    }
+
+    if (req.method === 'POST' && parts[2] === 'invites') {
+      const out = registry.createInvite(user);
+      return out.error ? send(400, out) : send(200, out);
+    }
+
+    if (req.method === 'DELETE' && parts[2] === 'devices' && parts[3]) {
+      const name = decodeURIComponent(parts[3]);
+      if (!admin && registry.ownerOf(name) !== user) return send(403, { error: '不是你的机器' });
+      const dev = online.get(name);
+      if (dev) { try { dev.ws.terminate(); } catch {} }
+      return send(200, { ok: registry.revoke(name) });
+    }
+
+    if (parts[2] === 'users') {
+      if (!admin) return send(403, { error: '需要管理员' });
+      if (req.method === 'GET') return send(200, { users: registry.listUsers().map((u) => ({ ...u, admin: registry.isAdmin(u.name) })) });
+      if (req.method === 'POST') {
+        const body = await readJsonBody(req);
+        const out = registry.createUser(body?.name);
+        return out.error ? send(400, out) : send(200, out);
+      }
+      if (req.method === 'DELETE' && parts[3]) {
+        const name = decodeURIComponent(parts[3]);
+        if (name === user) return send(400, { error: '不能吊销自己' });
+        return send(200, { ok: registry.revokeUser(name) });
+      }
+    }
+    return send(404, { error: 'not found' });
   }
 
   const m = /^\/d\/([a-z0-9][a-z0-9-]{0,23})(\/.*)?$/.exec(url.pathname);
@@ -268,9 +328,9 @@ server.on('upgrade', (req, socket, head) => {
     wssAgent.handleUpgrade(req, socket, head, (ws) => {
       const old = online.get(name);
       if (old) { try { old.ws.terminate(); } catch {} }
-      const dev = { ws, streams: new Map(), nextSid: 0 };
+      const dev = { ws, streams: new Map(), nextSid: 0, version: String(req.headers['x-tapmux-version'] || '') };
       online.set(name, dev);
-      registry.touch(name);
+      registry.touch(name, dev.version);
       console.log(`[relay] 设备上线: ${name}`);
       ws.on('message', (raw, isBinary) => {
         if (!isBinary) return;
