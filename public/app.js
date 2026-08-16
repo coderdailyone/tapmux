@@ -54,6 +54,118 @@ function toast(msg) {
   }, 2100);
 }
 
+/* ---------- 底部动作板 ---------- */
+function openSheet(html) {
+  $('#sheet').innerHTML = html;
+  requestAnimationFrame(() => { $('#scrim').classList.add('show'); $('#sheet').classList.add('show'); });
+}
+function closeSheet() {
+  $('#scrim').classList.remove('show');
+  $('#sheet').classList.remove('show');
+}
+$('#scrim').onclick = closeSheet;
+window.closeSheet = closeSheet;
+
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- 会话宏 ---------- */
+const trigSummary = (m) => {
+  const t = m.trigger || {};
+  if (t.type === 'interval') return `每 ${t.everySec}s → ${m.action.text}`;
+  return `${t.type === 'missing' ? '缺失' : '出现'} "${t.pattern}" → ${m.action.text}`;
+};
+
+async function saveMacros(name, macros) {
+  await api(`/api/sessions/${encodeURIComponent(name)}/macros`, { method: 'PUT', body: { macros } });
+}
+
+function macroPanel(s) {
+  const rows = (s.macros || []).map((m, i) => `
+    <div class="macro-row">
+      <input type="checkbox" data-t="${i}" ${m.enabled !== false ? 'checked' : ''}>
+      <span class="m-main">
+        <span class="m-name">${escapeHtml(m.name)}</span>
+        <span class="m-sub">${escapeHtml(trigSummary(m))}</span>
+      </span>
+      <button class="del" data-d="${i}">删除</button>
+    </div>`).join('') || '<p class="note">还没有宏。宏在会话空闲且无人打字时才会注入,自带冷却。</p>';
+  openSheet(`<div class="pane"><div class="body">
+    <h3>宏 · ${escapeHtml(s.name)}</h3>
+    ${rows}
+    <button class="wide-btn" id="mk-pin">＋ 钉住模型(预设)</button>
+    <button class="wide-btn ghost" id="mk-custom">＋ 自定义宏</button>
+    <button class="wide-btn ghost" onclick="closeSheet()">完成</button>
+  </div></div>`);
+
+  const mut = async (fn) => {
+    const next = JSON.parse(JSON.stringify(s.macros || []));
+    fn(next);
+    try { await saveMacros(s.name, next); s.macros = next; macroPanel(s); }
+    catch (e) { toast(e.message); }
+  };
+  $('#sheet').querySelectorAll('[data-t]').forEach((el) => {
+    el.onchange = () => mut((list) => { list[Number(el.dataset.t)].enabled = el.checked; });
+  });
+  $('#sheet').querySelectorAll('[data-d]').forEach((el) => {
+    el.onclick = () => mut((list) => { list.splice(Number(el.dataset.d), 1); });
+  });
+  $('#mk-pin').onclick = () => macroForm(s, {
+    name: '钉住模型', type: 'missing', pattern: '\\[Fable 5\\]',
+    text: '/model claude-fable-5', confirmEnter: true, cooldownSec: 300,
+    note: '屏幕上找不到该字样(=被降级)且会话空闲时,自动注入指令并补确认。字样按你状态条实际显示改。',
+  });
+  $('#mk-custom').onclick = () => macroForm(s, {
+    name: '', type: 'missing', pattern: '', text: '', confirmEnter: false, cooldownSec: 300,
+    note: '触发类型:字样缺失/字样出现(正则,按屏幕内容匹配)或定时。',
+  });
+}
+
+function macroForm(s, d) {
+  openSheet(`<div class="pane"><div class="body">
+    <h3>${d.name ? escapeHtml(d.name) : '自定义宏'}</h3>
+    <p class="note">${escapeHtml(d.note)}</p>
+    <label class="f">名称</label><input type="text" id="mf-name" value="${escapeHtml(d.name)}">
+    <label class="f">触发类型</label>
+    <select id="mf-type">
+      <option value="missing" ${d.type === 'missing' ? 'selected' : ''}>屏幕缺失字样时</option>
+      <option value="present" ${d.type === 'present' ? 'selected' : ''}>屏幕出现字样时</option>
+      <option value="interval" ${d.type === 'interval' ? 'selected' : ''}>定时</option>
+    </select>
+    <label class="f" id="mf-pat-l">匹配字样(正则)</label><input type="text" id="mf-pattern" value="${escapeHtml(d.pattern)}">
+    <label class="f" id="mf-int-l" style="display:none">间隔(秒,≥60)</label><input type="number" id="mf-every" value="300" style="display:none">
+    <label class="f">注入指令</label><input type="text" id="mf-text" value="${escapeHtml(d.text)}">
+    <label class="f" style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">
+      <input type="checkbox" id="mf-confirm" ${d.confirmEnter ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)"> 若弹出确认框,自动补回车
+    </label>
+    <label class="f">冷却(秒,≥60)</label><input type="number" id="mf-cd" value="${d.cooldownSec}">
+    <button class="wide-btn" id="mf-save">保存</button>
+    <button class="wide-btn ghost" onclick="closeSheet()">取消</button>
+  </div></div>`);
+  const sync = () => {
+    const iv = $('#mf-type').value === 'interval';
+    $('#mf-pat-l').style.display = $('#mf-pattern').style.display = iv ? 'none' : '';
+    $('#mf-int-l').style.display = $('#mf-every').style.display = iv ? '' : 'none';
+  };
+  $('#mf-type').onchange = sync;
+  sync();
+  $('#mf-save').onclick = async () => {
+    const type = $('#mf-type').value;
+    const macro = {
+      id: Math.random().toString(36).slice(2, 10),
+      name: $('#mf-name').value.trim(),
+      enabled: true,
+      trigger: type === 'interval'
+        ? { type, everySec: Number($('#mf-every').value) }
+        : { type, pattern: $('#mf-pattern').value },
+      action: { text: $('#mf-text').value, enter: true, confirmEnter: $('#mf-confirm').checked },
+      cooldownSec: Number($('#mf-cd').value) || 300,
+    };
+    const next = [...(s.macros || []), macro];
+    try { await saveMacros(s.name, next); s.macros = next; toast('宏已保存'); macroPanel(s); }
+    catch (e) { toast(e.message); }
+  };
+}
+
 function rel(ts) {
   const s = Math.max(1, (Date.now() - ts) / 1000);
   if (s < 60) return '刚刚';
@@ -130,9 +242,11 @@ async function loadList() {
           <div class="meta">${s.windows} 窗口 · ${rel(s.created)}创建</div>
           ${pv ? `<pre class="preview">${pv}</pre>` : ''}
         </div>
+        <button class="btn mini${(s.macros || []).length ? ' has' : ''}">宏${(s.macros || []).length ? '·' + s.macros.length : ''}</button>
         <button class="btn primary">打开</button>
         <button class="btn danger">✕</button>`);
       if (s.state === 'waiting') el.classList.add('attention');
+      el.querySelector('.btn.mini').onclick = () => macroPanel(s);
       el.querySelector('.btn.primary').onclick = () => { location.hash = `#/t/${encodeURIComponent(s.name)}`; };
       el.querySelector('.btn.danger').onclick = async () => {
         if (!window.confirm(`关闭会话 ${s.name}?里面正在跑的程序会被结束。`)) return;

@@ -168,6 +168,47 @@ section h2 {
   border: .5px solid var(--line);
 }
 
+.btn.mini { padding: 9px 12px; font-size: 13px; }
+.btn.mini.has { color: var(--accent); }
+
+/* ---- 底部动作板 ---- */
+.scrim {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .5); z-index: 30;
+  opacity: 0; pointer-events: none; transition: opacity .22s ease;
+}
+.scrim.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 8px);
+  z-index: 31; transform: translateY(110%); transition: transform .28s cubic-bezier(.2, .8, .3, 1);
+  max-height: 78vh; display: flex; flex-direction: column;
+}
+.sheet.show { transform: none; }
+.sheet .pane { background: #232325; border-radius: 18px; overflow-y: auto; }
+.sheet .body { padding: 18px; }
+.sheet h3 { margin: 0 0 6px; font-size: 18px; }
+.sheet .note { color: var(--dim); font-size: 13px; line-height: 1.6; margin: 0 0 14px; }
+.sheet label.f { display: block; color: var(--dim); font-size: 12.5px; margin: 12px 2px 5px; }
+.sheet input[type=text], .sheet input[type=number], .sheet select {
+  width: 100%; background: #0d0d0f; border: 1px solid var(--line); border-radius: 12px;
+  color: var(--fg); font-size: 16px; padding: 12px 13px; outline: none; font-family: inherit;
+}
+.sheet input:focus, .sheet select:focus { border-color: var(--accent); }
+.sheet .wide-btn {
+  width: 100%; margin-top: 12px; background: var(--accent); color: var(--accent-ink); border: 0;
+  border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; font-family: inherit;
+}
+.sheet .wide-btn.ghost { background: var(--card2); color: var(--fg); }
+.sheet .wide-btn.red { background: rgba(255, 69, 58, .15); color: var(--danger); }
+.macro-row {
+  display: flex; align-items: center; gap: 10px; padding: 12px 0;
+  border-bottom: .5px solid var(--line);
+}
+.macro-row .m-main { flex: 1; min-width: 0; }
+.macro-row .m-name { font-size: 15px; font-weight: 600; }
+.macro-row .m-sub { color: var(--dim); font-size: 12px; margin-top: 2px; word-break: break-all; }
+.macro-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.macro-row .del { border: 0; background: none; color: var(--danger); font-size: 14px; font-weight: 600; flex: none; padding: 6px; }
+
 .toast {
   position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%);
   background: rgba(44, 44, 46, .96); color: var(--fg);

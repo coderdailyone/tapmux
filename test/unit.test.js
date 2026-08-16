@@ -17,6 +17,29 @@ test('内容指纹:时钟/状态条自变不改指纹,正文变则变', () => {
   assert.notEqual(contentFingerprint(a), contentFingerprint(c));
 });
 import { decideNotification } from '../server/notify.js';
+import { validateMacros, shouldFire, inputBusy } from '../server/macros.js';
+
+test('会话宏:触发判定/冷却/输入占用/校验', () => {
+  const now = 1_000_000_000;
+  const pin = { trigger: { type: 'missing', pattern: '\\[Fable 5\\]' }, cooldownSec: 300, action: { text: '/model x' } };
+  assert.ok(shouldFire(pin, '状态条 [Sonnet] 别的', now), '降级(字样缺失)应触发');
+  assert.ok(!shouldFire(pin, '状态条 [Fable 5] 正常', now), '未降级不触发');
+  assert.ok(!shouldFire({ ...pin, lastFiredAt: now - 100_000 }, '[Sonnet]', now), '冷却期内不重发');
+  assert.ok(shouldFire({ ...pin, lastFiredAt: now - 301_000 }, '[Sonnet]', now), '冷却过后可再发');
+  const iv = { trigger: { type: 'interval', everySec: 600 }, cooldownSec: 60, action: { text: 'x' } };
+  assert.ok(shouldFire({ ...iv, lastFiredAt: now - 601_000 }, '', now));
+  assert.ok(!shouldFire({ ...iv, lastFiredAt: now - 100_000 }, '', now));
+  assert.ok(shouldFire({ trigger: { type: 'present', pattern: 'ERROR' }, cooldownSec: 60, action: { text: 'x' } }, '有 ERROR 出现', now));
+
+  assert.ok(inputBusy('❯ 我打了一半的话'), '输入框有内容=占用');
+  assert.ok(!inputBusy('❯ \n别的行'), '空输入框=不占用');
+  assert.ok(!inputBusy('❯ Try "create a util logging.py that..."'), 'claude 占位提示=不占用(真机抓的坑)');
+
+  assert.equal(validateMacros([{ id: 'a', name: '钉', trigger: { type: 'missing', pattern: 'x' }, action: { text: '/m' } }]), null);
+  assert.ok(validateMacros([{ id: 'a', name: '钉', trigger: { type: 'missing', pattern: '(' }, action: { text: 'x' } }]), '烂正则拒绝');
+  assert.ok(validateMacros([{ id: 'a', name: '钉', trigger: { type: 'interval', everySec: 5 }, action: { text: 'x' } }]), '间隔过短拒绝');
+  assert.ok(validateMacros(Array(9).fill({ name: 'x', trigger: { type: 'interval', everySec: 60 }, action: { text: 'x' } })), '数量超限拒绝');
+});
 import { T, encode, decode, encodeJson, parseJson, cleanHeaders } from '../server/relay/protocol.js';
 import { Registry } from '../server/relay/registry.js';
 

@@ -27,8 +27,21 @@ export class ManagedStore {
   }
 
   add(name, via) {
-    this.managed.set(name, { addedAt: Date.now(), via });
+    const prev = this.managed.get(name);
+    this.managed.set(name, { addedAt: Date.now(), via, macros: prev?.macros || [] });
     this.save();
+  }
+
+  setMacros(name, macros) {
+    const entry = this.managed.get(name);
+    if (!entry) return false;
+    entry.macros = macros;
+    this.save();
+    return true;
+  }
+
+  macrosOf(name) {
+    return this.managed.get(name)?.macros || [];
   }
 
   remove(name) {

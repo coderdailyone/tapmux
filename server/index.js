@@ -20,6 +20,7 @@ import { handleAttach } from './attach.js';
 import { previewFromCapture, detectClaudeState, contentFingerprint } from './preview.js';
 import { Notifier } from './notify.js';
 import { startAgent } from './agent.js';
+import { MacroEngine, validateMacros } from './macros.js';
 
 const config = loadConfig();
 const store = new ManagedStore(config.dataDir);
@@ -107,6 +108,7 @@ async function probe() {
     const snap = await paneSnapshot(m.name, m.cmds.includes('claude'));
     m.preview = snap.preview;
     m.state = snap.state;
+    m.macros = store.macrosOf(m.name);
   }));
   const dead = store.names().filter((n) => !liveNames.has(n));
   return { managed, wild, dead };
@@ -133,6 +135,18 @@ async function handleApi(req, res, url) {
   if (parts[0] === 'api' && parts[1] === 'sessions' && parts.length >= 3) {
     const name = decodeURIComponent(parts[2]);
     if (!validSessionName(name)) return sendJson(res, 400, { error: 'bad name' });
+
+    if (req.method === 'PUT' && parts[3] === 'macros') {
+      if (!store.has(name)) return sendJson(res, 403, { error: '未纳管的会话' });
+      const body = await readJson(req);
+      const err = validateMacros(body.macros);
+      if (err) return sendJson(res, 400, { error: err });
+      // 保留同 id 宏的 lastFiredAt(编辑不清零冷却)
+      const prev = new Map(store.macrosOf(name).map((m) => [m.id, m.lastFiredAt]));
+      for (const m of body.macros) if (prev.has(m.id)) m.lastFiredAt = prev.get(m.id);
+      store.setMacros(name, body.macros);
+      return sendJson(res, 200, { ok: true });
+    }
 
     if (req.method === 'POST' && parts[3] === 'adopt') {
       if (!(await hasSession(name))) return sendJson(res, 404, { error: '会话不存在' });
@@ -280,6 +294,9 @@ if (notifier.enabled()) {
 const internalSecret = crypto.randomBytes(16).toString('hex');
 setInternalSecret(internalSecret);
 startAgent(config, { internalSecret });
+
+const macroEngine = new MacroEngine({ store, capture: capturePane, sendText, sendKeys });
+setInterval(() => macroEngine.tick(), 30_000).unref();
 
 server.listen(config.port, config.bind, () => {
   const ifaces = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);
