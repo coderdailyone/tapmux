@@ -217,6 +217,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (registry.ownerOf(name) !== user) { sendHtml(res, 403, '这台机器不在你名下'); return; }
+  // 跨站防护(桥接端对隧道流量已放行,由这里守):非安全方法带 Origin 时必须同源
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin) {
+    let ok = false;
+    try { ok = new URL(req.headers.origin).host === req.headers.host; } catch {}
+    if (!ok) { res.writeHead(403, { 'content-type': 'application/json' }); res.end('{"error":"bad origin"}'); return; }
+  }
 
   const dev = online.get(name);
   if (!dev) { res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' }); res.end('设备离线'); return; }
@@ -304,6 +310,11 @@ server.on('upgrade', (req, socket, head) => {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;
+  }
+  if (req.headers.origin) {
+    let ok = false;
+    try { ok = new URL(req.headers.origin).host === req.headers.host; } catch {}
+    if (!ok) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
   }
   const dev = online.get(name);
   if (!dev) { socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n'); socket.destroy(); return; }

@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 
 import { loadConfig, CONFIG_FILE } from './config.js';
 import crypto from 'node:crypto';
-import { checkAuth, originOk, clientIp, setInternalSecret } from './auth.js';
+import { checkAuth, originOk, clientIp, setInternalSecret, isInternal } from './auth.js';
 import {
   listSessions, paneCommands, hasSession, createSession, killSession,
   sendText, validSessionName, validKeys, sendKeys, enterCopyMode, scrollPane,
@@ -202,7 +202,9 @@ const server = http.createServer(async (req, res) => {
     return send(res, 302, '', { 'set-cookie': auth.setCookie, location: `.${auth.redirect || '/'}` });
   }
 
-  if (req.method !== 'GET' && req.method !== 'HEAD' && !originOk(req)) {
+  // 隧道流量(带内部章)的 Origin 属于公网域名,与本机 Host 天然不同:
+  // 跨站防护在 relay 层(用户 cookie SameSite + relay 端 Origin 校验)已完成,此处放行
+  if (!isInternal(req) && req.method !== 'GET' && req.method !== 'HEAD' && !originOk(req)) {
     return sendJson(res, 403, { error: 'bad origin' });
   }
 
@@ -247,7 +249,7 @@ server.on('upgrade', (req, socket, head) => {
   socket.on('error', () => { try { socket.destroy(); } catch {} });
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const auth = checkAuth(req, config.token);
-  if (url.pathname !== '/ws/attach' || !auth.ok || auth.redirect || !originOk(req)) {
+  if (url.pathname !== '/ws/attach' || !auth.ok || auth.redirect || !(isInternal(req) || originOk(req))) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;

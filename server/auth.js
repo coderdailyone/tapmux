@@ -8,6 +8,10 @@ let internalSecret = null;
 export function setInternalSecret(s) {
   internalSecret = s;
 }
+export function isInternal(req) {
+  const h = req.headers['x-tapmux-internal'];
+  return Boolean(h && internalSecret && tokensEqual(String(h), internalSecret));
+}
 
 // 登录失败退避:ip -> { fails, blockedUntil }
 const attempts = new Map();
