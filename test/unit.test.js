@@ -32,10 +32,34 @@ test('relay 协议:帧编解码往返 + 头清洗', () => {
   assert.deepEqual(h, { Cookie: 'a=1', 'content-type': 'json' });
 });
 
+test('relay 用户体系:一人一 token,机器挂人名下,邀请码带归属', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tapmux-usr-'));
+  const reg = new Registry(dir);
+  const u = reg.createUser('zhang');
+  assert.ok(u.userToken);
+  assert.equal(reg.authUser(u.userToken), 'zhang');
+  assert.equal(reg.authUser('bad'), null);
+  assert.ok(reg.createUser('zhang').error, '重名拒绝');
+  assert.ok(reg.createInvite('nobody').error, '给不存在的用户发码拒绝');
+  const { code } = reg.createInvite('zhang');
+  const d = reg.register(code, 'box-1');
+  assert.equal(reg.ownerOf('box-1'), 'zhang', '经邀请码注册自动归属');
+  assert.ok(!JSON.stringify(reg.data).includes(u.userToken), '用户 token 明文不落盘');
+  assert.deepEqual(reg.listUsers()[0].devices, ['box-1']);
+  const u2 = reg.createUser('li');
+  assert.ok(reg.claimDevice('box-1', 'li'));
+  assert.equal(reg.ownerOf('box-1'), 'li');
+  assert.ok(reg.revokeUser('zhang'));
+  assert.equal(reg.authUser(u.userToken), null);
+  assert.ok(d.deviceToken && u2.userToken);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('relay 注册表:邀请码单次有效,token 只存哈希,可吊销', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tapmux-reg-'));
   const reg = new Registry(dir);
-  const code = reg.createInvite();
+  reg.createUser('u');
+  const { code } = reg.createInvite('u');
   assert.ok(reg.register('wrong', 'a').error);
   const r = reg.register(code, 'home-1');
   assert.equal(r.name, 'home-1');
@@ -43,7 +67,7 @@ test('relay 注册表:邀请码单次有效,token 只存哈希,可吊销', () =>
   assert.ok(reg.auth('home-1', r.deviceToken));
   assert.ok(!reg.auth('home-1', 'bad'));
   assert.ok(!JSON.stringify(reg.data).includes(r.deviceToken), '明文 token 不落盘');
-  assert.ok(reg.register(reg.createInvite(), 'Home!').error, '非法设备名拒绝');
+  assert.ok(reg.register(reg.createInvite('u').code, 'Home!').error, '非法设备名拒绝');
   assert.ok(reg.revoke('home-1'));
   assert.ok(!reg.auth('home-1', r.deviceToken));
   fs.rmSync(dir, { recursive: true, force: true });

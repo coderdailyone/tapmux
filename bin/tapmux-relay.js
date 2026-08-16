@@ -20,23 +20,79 @@ const MAX_STREAMS = 64;
 const registry = new Registry(DATA_DIR);
 
 const cmd = process.argv[2];
-if (cmd === 'invite') {
-  console.log(`邀请码(单次有效): ${registry.createInvite()}`);
+if (cmd === 'user-add') {
+  const out = registry.createUser(process.argv[3]);
+  if (out.error) { console.error(out.error); process.exit(1); }
+  console.log(`用户 ${out.name} 已创建`);
+  console.log(`用户 token(仅此一次,按 SSH 私钥对待): ${out.userToken}`);
+  console.log(`手机登录: https://你的域名/relay/login?token=${out.userToken}`);
+  process.exit(0);
+} else if (cmd === 'users') {
+  for (const u of registry.listUsers()) console.log(`${u.name}\t机器: ${u.devices.join(', ') || '(无)'}`);
+  process.exit(0);
+} else if (cmd === 'user-revoke') {
+  console.log(registry.revokeUser(process.argv[3]) ? '已吊销(名下机器保留,可 claim 给别人)' : '用户不存在');
+  process.exit(0);
+} else if (cmd === 'claim') {
+  console.log(registry.claimDevice(process.argv[3], process.argv[4]) ? '已归属' : '设备或用户不存在');
+  process.exit(0);
+} else if (cmd === 'invite') {
+  const out = registry.createInvite(process.argv[3]);
+  if (out.error) { console.error(`${out.error}(用法: tapmux-relay invite <用户名>)`); process.exit(1); }
+  console.log(`邀请码(单次有效,机器将挂到用户 ${process.argv[3]} 名下): ${out.code}`);
   console.log('内网机上执行: tapmux relay-join <https://你的域名> <邀请码> <设备名>');
   process.exit(0);
 } else if (cmd === 'devices') {
   for (const d of registry.list()) {
     const seen = d.lastSeen ? new Date(d.lastSeen).toISOString() : '从未';
-    console.log(`${d.name}\t最后在线: ${seen}`);
+    console.log(`${d.name}\t属主: ${d.owner || '(无)'}\t最后在线: ${seen}`);
   }
   process.exit(0);
 } else if (cmd === 'revoke') {
   console.log(registry.revoke(process.argv[3]) ? '已吊销' : '设备不存在');
   process.exit(0);
 } else if (cmd !== undefined) {
-  console.error('用法: tapmux-relay [invite|devices|revoke <名>]');
+  console.error('用法: tapmux-relay [user-add <名>|users|user-revoke <名>|invite <用户>|claim <设备> <用户>|devices|revoke <设备>]');
   process.exit(1);
 }
+
+// ---- 用户鉴权(cookie 存用户 token,每请求对哈希)+ 登录失败退避 ----
+const USER_COOKIE = 'tapmux_user';
+const fails = new Map(); // ip -> {n, until}
+function clientIp(req) {
+  const sock = req.socket.remoteAddress || '';
+  if (sock === '127.0.0.1' || sock === '::1' || sock === '::ffff:127.0.0.1') {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return sock;
+}
+function blocked(ip) {
+  const f = fails.get(ip);
+  return f && f.until > Date.now();
+}
+function fail(ip) {
+  const f = fails.get(ip) || { n: 0, until: 0 };
+  f.n += 1;
+  if (f.n >= 5) f.until = Date.now() + 60_000 * 2 ** Math.min(f.n - 5, 6);
+  fails.set(ip, f);
+}
+function cookieOf(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return null;
+}
+function userFromReq(req) {
+  registry.reload();
+  return registry.authUser(cookieOf(req, USER_COOKIE));
+}
+function sendHtml(res, code, body, headers = {}) {
+  res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', ...headers });
+  res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;padding:32px 20px;background:#0b0f14;color:#e8eef5;font-family:-apple-system,'PingFang SC',sans-serif">${body}`);
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---- 在线设备表:name -> { ws, streams: Map<sid, handler>, nextSid } ----
 const online = new Map();
@@ -99,6 +155,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === '/relay/login') {
+    const ip = clientIp(req);
+    if (blocked(ip)) { sendHtml(res, 429, '尝试过多,稍后再试'); return; }
+    const t = url.searchParams.get('token');
+    if (t !== null) {
+      registry.reload();
+      const user = registry.authUser(t);
+      if (user) {
+        sendHtml(res, 302, '', {
+          'set-cookie': `${USER_COOKIE}=${t}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${180 * 24 * 3600}`,
+          location: '/relay/',
+        });
+        return;
+      }
+      fail(ip);
+    }
+    sendHtml(res, 401, `<h2 style="margin:0 0 16px">tapmux</h2>
+      <form method="GET" action="/relay/login">
+      <input name="token" placeholder="用户 token" autocapitalize="off" autocorrect="off"
+        style="width:100%;max-width:420px;box-sizing:border-box;background:#161e28;border:1px solid #223041;border-radius:12px;color:#e8eef5;font-size:16px;padding:12px">
+      <button style="margin-top:12px;display:block;background:#34d399;color:#06281c;border:0;border-radius:12px;padding:12px 20px;font-size:15px;font-weight:700">登录</button>
+      </form>`);
+    return;
+  }
+
+  if (url.pathname === '/relay/logout') {
+    sendHtml(res, 302, '', { 'set-cookie': `${USER_COOKIE}=; Path=/; Max-Age=0`, location: '/relay/login' });
+    return;
+  }
+
+  if (url.pathname === '/relay/' || url.pathname === '/relay') {
+    const user = userFromReq(req);
+    if (!user) { sendHtml(res, 302, '', { location: '/relay/login' }); return; }
+    const mine = registry.list().filter((d) => d.owner === user);
+    const rows = mine.map((d) => {
+      const on = online.has(d.name);
+      return `<a href="/d/${esc(d.name)}/" style="display:flex;align-items:center;gap:12px;background:#161e28;border:1px solid #223041;border-radius:16px;padding:16px;margin-bottom:10px;color:#e8eef5;text-decoration:none;max-width:480px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${on ? '#34d399' : '#f87171'}"></span>
+        <b style="font-size:17px">${esc(d.name)}</b>
+        <span style="color:#8b9bab;font-size:13px;margin-left:auto">${on ? '在线' : '离线'}</span></a>`;
+    }).join('') || '<p style="color:#8b9bab">名下还没有机器,用邀请码接一台吧。</p>';
+    sendHtml(res, 200, `<h2 style="margin:0 0 4px"><span style="color:#34d399;font-family:ui-monospace,monospace">❯</span> 我的机器</h2>
+      <p style="color:#8b9bab;margin:0 0 20px;font-size:13px">${esc(user)} · <a href="/relay/logout" style="color:#8b9bab">退出</a></p>${rows}`);
+    return;
+  }
+
   const m = /^\/d\/([a-z0-9][a-z0-9-]{0,23})(\/.*)?$/.exec(url.pathname);
   if (!m) { res.writeHead(404); res.end('not found'); return; }
   const [, name, rest] = m;
@@ -107,10 +209,22 @@ const server = http.createServer(async (req, res) => {
     res.end();
     return;
   }
+  // 用户门禁:登录 + 属主匹配
+  const user = userFromReq(req);
+  if (!user) {
+    if (rest.startsWith('/api/') || rest.startsWith('/ws/')) { res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":"unauthorized"}'); }
+    else sendHtml(res, 302, '', { location: '/relay/login' });
+    return;
+  }
+  if (registry.ownerOf(name) !== user) { sendHtml(res, 403, '这台机器不在你名下'); return; }
+
   const dev = online.get(name);
   if (!dev) { res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' }); res.end('设备离线'); return; }
 
   const headers = cleanHeaders(req.headers);
+  delete headers['x-tapmux-user'];
+  delete headers['x-tapmux-internal']; // 防伪:这两个头只能由链路自己盖
+  headers['x-tapmux-user'] = user;
   const xff = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   headers['x-forwarded-for'] = String(xff);
 
@@ -185,11 +299,20 @@ server.on('upgrade', (req, socket, head) => {
   const m = /^\/d\/([a-z0-9][a-z0-9-]{0,23})(\/.*)$/.exec(url.pathname);
   if (!m) { socket.write('HTTP/1.1 404 Not Found\r\n\r\n'); socket.destroy(); return; }
   const [, name, rest] = m;
+  const wsUser = userFromReq(req);
+  if (!wsUser || registry.ownerOf(name) !== wsUser) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   const dev = online.get(name);
   if (!dev) { socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n'); socket.destroy(); return; }
 
   wssPublic.handleUpgrade(req, socket, head, (client) => {
     const headers = cleanHeaders(req.headers);
+    delete headers['x-tapmux-user'];
+    delete headers['x-tapmux-internal'];
+    headers['x-tapmux-user'] = wsUser;
     const s = openStream(dev, {
       onAck: (a) => {
         s.bump();

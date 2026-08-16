@@ -73,14 +73,21 @@ tapmux-relay &            # 建议配 systemd 常驻
 tapmux-relay invite       # 生成一枚单次邀请码
 ```
 
+建用户与邀请码(**一人一 token,机器挂人名下**):
+
+```bash
+tapmux-relay user-add <用户名>     # 得到用户 token(按 SSH 私钥对待)
+tapmux-relay invite <用户名>       # 生成单次邀请码,注册的机器自动归属该用户
+```
+
 每台内网机:
 
 ```bash
 tapmux relay-join https://你的域名 <邀请码> <设备名> [本地代理url]
-# 重启 tapmux 后,经 https://你的域名/d/<设备名>/ 访问该机
+# 重启 tapmux 生效
 ```
 
-设备 token 只存哈希;`tapmux-relay devices` 看清单,`revoke <名>` 一键踢出。跨境等不稳链路时,第四个参数填本地代理(如 `http://127.0.0.1:7890`),agent 的上行隧道会走它。
+手机上只需登录一次:`https://你的域名/relay/login?token=<用户token>` → 进入「我的机器」门户,点任意一台直达,**全程不需要任何机器 token**(桥接凭与 relay 隧道同进程的内部密钥信任已过鉴权的流量;机器本地 token 仅用于直连形态)。管理:`users` / `devices` / `claim <设备> <用户>` / `revoke <设备>` / `user-revoke <用户>`。跨境等不稳链路时,relay-join 第四个参数填本地代理(如 `http://127.0.0.1:7890`),agent 上行隧道会走它——并且尽量用**域名**而非 IP 连 relay,才能吃上代理分流规则。
 
 ## Telegram 完工提醒(可选)
 

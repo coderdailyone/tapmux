@@ -5,9 +5,17 @@ import { T, encode, encodeJson, decode, parseJson, cleanHeaders } from './relay/
 
 // relay 接入 agent:主动外连 relay,把隧道里的请求回环转发给本机桥接服务。
 // 复用本机的全部鉴权与逻辑——agent 对业务零感知,只搬字节。
-export function startAgent(config, log = console) {
+export function startAgent(config, { log = console, internalSecret = '' } = {}) {
   const r = config.relay || {};
   if (!r.url || !r.deviceName || !r.deviceToken) return null;
+
+  // 隧道来的请求盖进程内密钥章:桥接凭它放行(用户已在 relay 层验过)
+  const stamp = (headers) => {
+    const h = { ...headers };
+    delete h['x-tapmux-internal'];
+    if (internalSecret) h['x-tapmux-internal'] = internalSecret;
+    return h;
+  };
 
   const localPort = config.port;
   let ws = null;
@@ -59,7 +67,7 @@ export function startAgent(config, log = console) {
         if (!meta) return;
         const req = http.request({
           host: '127.0.0.1', port: localPort, path: meta.path, method: meta.method,
-          headers: { ...meta.headers, host: `127.0.0.1:${localPort}` },
+          headers: { ...stamp(meta.headers), host: `127.0.0.1:${localPort}` },
         }, (res) => {
           send(encodeJson(T.RES_HEAD, sid, { status: res.statusCode, headers: cleanHeaders(res.headers) }));
           res.on('data', (c) => send(encode(T.RES_BODY, sid, c)));
@@ -78,7 +86,7 @@ export function startAgent(config, log = console) {
       } else if (type === T.WS_OPEN) {
         const meta = parseJson(payload);
         if (!meta) return;
-        const local = new WebSocket(`ws://127.0.0.1:${localPort}${meta.path}`, { headers: meta.headers });
+        const local = new WebSocket(`ws://127.0.0.1:${localPort}${meta.path}`, { headers: stamp(meta.headers) });
         streams.set(sid, { local });
         local.on('open', () => send(encodeJson(T.WS_ACK, sid, { ok: true })));
         local.on('message', (data, bin) => send(encode(bin ? T.WS_BIN : T.WS_TXT, sid, bin ? data : Buffer.from(String(data)))));

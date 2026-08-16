@@ -2,6 +2,13 @@ import crypto from 'node:crypto';
 
 const COOKIE_NAME = 'tapmux_token';
 
+// 进程内信任密钥:每次启动随机生成,仅同进程的 relay agent 持有。
+// 带此头的请求 = 从本进程 agent 的隧道来的、已在 relay 层完成用户鉴权的流量。
+let internalSecret = null;
+export function setInternalSecret(s) {
+  internalSecret = s;
+}
+
 // 登录失败退避:ip -> { fails, blockedUntil }
 const attempts = new Map();
 const MAX_FAILS = 5;
@@ -55,6 +62,11 @@ export function parseCookies(header) {
 
 // 校验请求;url 上带 ?token= 且正确时返回 setCookie 指示
 export function checkAuth(req, token) {
+  const internal = req.headers['x-tapmux-internal'];
+  if (internal && internalSecret && tokensEqual(String(internal), internalSecret)) {
+    return { ok: true };
+  }
+
   const ip = clientIp(req);
   if (isBlocked(ip)) return { ok: false, blocked: true };
 

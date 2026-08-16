@@ -5,7 +5,8 @@ import { createRequire } from 'node:module';
 import { WebSocketServer } from 'ws';
 
 import { loadConfig, CONFIG_FILE } from './config.js';
-import { checkAuth, originOk, clientIp } from './auth.js';
+import crypto from 'node:crypto';
+import { checkAuth, originOk, clientIp, setInternalSecret } from './auth.js';
 import {
   listSessions, paneCommands, hasSession, createSession, killSession,
   sendText, validSessionName, validKeys, sendKeys, enterCopyMode, scrollPane,
@@ -274,7 +275,9 @@ if (notifier.enabled()) {
   console.log('[tapmux] Telegram 通知巡检已启用(15s 一拍)');
 }
 
-startAgent(config);
+const internalSecret = crypto.randomBytes(16).toString('hex');
+setInternalSecret(internalSecret);
+startAgent(config, { internalSecret });
 
 server.listen(config.port, config.bind, () => {
   const ifaces = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);

@@ -3,13 +3,17 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 // 设备注册表:邀请码单次有效,设备 token 只存哈希。JSON 落盘,备份即拷文件。
+function sha256(s) {
+  return crypto.createHash('sha256').update(s).digest('hex');
+}
+
 export class Registry {
   constructor(dataDir) {
     fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     this.file = path.join(dataDir, 'registry.json');
-    this.data = { devices: {}, invites: {} };
+    this.data = { users: {}, devices: {}, invites: {} };
     if (fs.existsSync(this.file)) {
-      this.data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      this.data = { users: {}, ...JSON.parse(fs.readFileSync(this.file, 'utf8')) };
     }
   }
 
@@ -26,11 +30,55 @@ export class Registry {
     }
   }
 
-  createInvite() {
-    const code = crypto.randomBytes(6).toString('hex');
-    this.data.invites[code] = { createdAt: Date.now(), used: false };
+  // ---- 用户:一人一 token,机器挂在人名下 ----
+  createUser(name) {
+    if (!Registry.validName(name)) return { error: '用户名只能用小写字母数字连字符' };
+    if (this.data.users[name]) return { error: '用户已存在' };
+    const token = crypto.randomBytes(24).toString('hex');
+    this.data.users[name] = { tokenHash: sha256(token), createdAt: Date.now() };
     this.save();
-    return code;
+    return { name, userToken: token };
+  }
+
+  // token → 用户名(恒时比较;用户数少,遍历即可)
+  authUser(token) {
+    if (typeof token !== 'string' || !token) return null;
+    const h = Buffer.from(sha256(token), 'hex');
+    for (const [name, u] of Object.entries(this.data.users)) {
+      const want = Buffer.from(u.tokenHash, 'hex');
+      if (h.length === want.length && crypto.timingSafeEqual(h, want)) return name;
+    }
+    return null;
+  }
+
+  revokeUser(name) {
+    if (!this.data.users[name]) return false;
+    delete this.data.users[name];
+    this.save();
+    return true;
+  }
+
+  listUsers() {
+    return Object.entries(this.data.users).map(([name, u]) => ({
+      name,
+      devices: Object.entries(this.data.devices).filter(([, d]) => d.owner === name).map(([n]) => n),
+    }));
+  }
+
+  claimDevice(device, user) {
+    if (!this.data.devices[device] || !this.data.users[user]) return false;
+    this.data.devices[device].owner = user;
+    this.save();
+    return true;
+  }
+
+  // 邀请码归属某用户:用它注册的设备自动挂到该用户名下
+  createInvite(user) {
+    if (!this.data.users[user]) return { error: '用户不存在,先 user-add' };
+    const code = crypto.randomBytes(6).toString('hex');
+    this.data.invites[code] = { createdAt: Date.now(), used: false, user };
+    this.save();
+    return { code };
   }
 
   static validName(name) {
@@ -47,12 +95,17 @@ export class Registry {
     inv.used = true;
     inv.usedBy = name;
     this.data.devices[name] = {
-      tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+      tokenHash: sha256(token),
+      owner: inv.user || null,
       createdAt: Date.now(),
       lastSeen: 0,
     };
     this.save();
     return { name, deviceToken: token };
+  }
+
+  ownerOf(device) {
+    return this.data.devices[device]?.owner || null;
   }
 
   auth(name, token) {
