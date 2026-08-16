@@ -4,6 +4,11 @@
 
 > **palmux** is a self-hosted web bridge for driving tmux sessions — especially [Claude Code](https://claude.com/claude-code) — from your phone's browser. One Node process on the machine where tmux lives; a PWA-ready mobile UI with an IME-friendly compose bar, a scroll rail wired to tmux copy-mode, image upload straight into Claude's context, and battle-tested reconnect logic. tmux is the single source of truth: disconnect anywhere, reattach and the screen redraws authoritatively.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-sessions.jpg" width="47%" alt="会话列表:状态徽章、纳管管理">
+  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-terminal.jpg" width="47%" alt="终端视图:Claude Code 会话、侧边滚轮、中文输入条">
+</p>
+
 ## 特性
 
 - **纳管制会话管理**:探测机器上的 tmux 会话,选择性纳管;网页只能触碰纳管清单内的会话
