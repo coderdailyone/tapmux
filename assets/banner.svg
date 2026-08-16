@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" role="img" aria-label="palmux">
+  <defs>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399" stop-opacity=".14"/>
+      <stop offset=".5" stop-color="#34d399" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="240" rx="24" fill="#0b0f14"/>
+  <rect x="1.5" y="1.5" width="1197" height="237" rx="23" fill="none" stroke="#223041" stroke-width="3"/>
+  <rect width="1200" height="240" rx="24" fill="url(#glow)"/>
+
+  <!-- 品牌符号:❯ + 光标块 -->
+  <text x="86" y="152" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="96" font-weight="700" fill="#34d399">❯</text>
+  <text x="170" y="152" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="88" font-weight="700" fill="#e8eef5" letter-spacing="2">palmux</text>
+  <rect x="530" y="118" width="44" height="18" fill="#34d399">
+    <animate attributeName="opacity" values="1;0;1" dur="1.6s" repeatCount="indefinite"/>
+  </rect>
+
+  <text x="88" y="200" font-family="-apple-system,'PingFang SC','Segoe UI',sans-serif" font-size="26" fill="#8b9bab">掌上 tmux — 用手机浏览器随时随地指挥 Claude Code</text>
+
+  <!-- 右侧:手机剪影里的迷你终端 -->
+  <g transform="translate(950,38)">
+    <rect width="150" height="164" rx="22" fill="#121820" stroke="#223041" stroke-width="3"/>
+    <rect x="14" y="18" width="86" height="10" rx="5" fill="#34d399" opacity=".85"/>
+    <rect x="14" y="40" width="118" height="10" rx="5" fill="#2a3a4d"/>
+    <rect x="14" y="62" width="102" height="10" rx="5" fill="#2a3a4d"/>
+    <rect x="14" y="84" width="64" height="10" rx="5" fill="#fbbf24" opacity=".9"/>
+    <rect x="14" y="120" width="122" height="26" rx="13" fill="#0b0f14" stroke="#223041" stroke-width="2"/>
+    <rect x="20" y="128" width="52" height="10" rx="5" fill="#34d399" opacity=".55"/>
+  </g>
+</svg>

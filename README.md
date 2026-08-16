@@ -1,13 +1,29 @@
-# palmux
+<p align="center">
+  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/banner.svg" width="840" alt="palmux — 掌上 tmux">
+</p>
 
-**掌上 tmux** —— 用手机浏览器操作你机器上的 tmux 会话,专为「随时随地指挥 Claude Code」而生。
+<p align="center">
+  <a href="https://www.npmjs.com/package/palmux"><img src="https://img.shields.io/npm/v/palmux?color=34d399&label=npm" alt="npm"></a>
+  <img src="https://img.shields.io/badge/node-%E2%89%A520-34d399" alt="node >= 20">
+  <img src="https://img.shields.io/badge/license-MIT-8b9bab" alt="MIT">
+</p>
+
+<p align="center">用手机浏览器操作你机器上的 tmux 会话,专为「随时随地指挥 Claude Code」而生。</p>
 
 > **palmux** is a self-hosted web bridge for driving tmux sessions — especially [Claude Code](https://claude.com/claude-code) — from your phone's browser. One Node process on the machine where tmux lives; a PWA-ready mobile UI with an IME-friendly compose bar, a scroll rail wired to tmux copy-mode, image upload straight into Claude's context, and battle-tested reconnect logic. tmux is the single source of truth: disconnect anywhere, reattach and the screen redraws authoritatively.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-sessions.jpg" width="47%" alt="会话列表:状态徽章、纳管管理">
-  <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-terminal.jpg" width="47%" alt="终端视图:Claude Code 会话、侧边滚轮、中文输入条">
-</p>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-sessions.png" width="330" alt="会话列表"><br>
+      <sub>会话列表:状态徽章 · 等确认高亮 · 屏幕预览 · 探测纳管</sub>
+    </td>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/coderdailyone/palmux/main/assets/screenshot-terminal.jpg" width="330" alt="终端视图"><br>
+      <sub>终端视图:中文输入条 · 快捷键 · 侧边滚轮(iPhone 实拍)</sub>
+    </td>
+  </tr>
+</table>
 
 ## 特性
 
