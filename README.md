@@ -34,6 +34,8 @@
 - **图片上传**:拍照/相册/多选 → 客户端压缩 → 路径自动填入输入条,Claude 用 Read 直接看图;按保留期自动清理
 - **断线自愈**:防风暴重连,重连即由 tmux 权威重绘;iOS 键盘弹收视口有看门狗兜底
 - **PWA**:加入主屏幕即全屏应用,专属图标
+- **多机接入(relay)**:一台公网机 + 邀请码,承接任意多台内网机器,`/d/<设备名>/` 逐台直达
+- **完工提醒**:Claude 干完活 / 停下来等确认时,推送 Telegram(可选)
 
 ## 安装
 
@@ -60,6 +62,29 @@ set -g history-limit 100000
 set -g window-size latest      # 多端同看:尺寸听最后操作的客户端
 set -g alternate-screen off    # Claude Code 输出进历史,滚动才有内容可翻
 ```
+
+## 多机接入(relay)
+
+公网机(放在你的反代/TLS 之后,默认只听 127.0.0.1:7803):
+
+```bash
+npm install -g tapmux
+tapmux-relay &            # 建议配 systemd 常驻
+tapmux-relay invite       # 生成一枚单次邀请码
+```
+
+每台内网机:
+
+```bash
+tapmux relay-join https://你的域名 <邀请码> <设备名> [本地代理url]
+# 重启 tapmux 后,经 https://你的域名/d/<设备名>/ 访问该机
+```
+
+设备 token 只存哈希;`tapmux-relay devices` 看清单,`revoke <名>` 一键踢出。跨境等不稳链路时,第四个参数填本地代理(如 `http://127.0.0.1:7890`),agent 的上行隧道会走它。
+
+## Telegram 完工提醒(可选)
+
+在 `~/.config/tapmux/config.json` 的 `notify` 段填 `enabled: true`、bot token、chat id(可选 `proxyUrl`),并把 `publicUrl` 设为你的访问域名(消息里带直达链接)。之后:Claude 停下来**等你确认**立刻推送;**干完一段超过一分钟的活**也推送。检测基于 tmux 屏幕状态巡检,无需改 Claude Code 任何配置。
 
 ## 公网访问
 
