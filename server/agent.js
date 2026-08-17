@@ -51,8 +51,18 @@ export function startAgent(config, { log = console, internalSecret = '' } = {}) 
       alive = true;
       log.log(`[tapmux] relay 已接通: ${r.url} (设备 ${r.deviceName})`);
       clearInterval(hb);
+      let missed = 0;
       hb = setInterval(() => {
-        if (!alive) { log.error('[tapmux] relay 心跳失联,重连'); try { ws.terminate(); } catch {} return; }
+        if (alive) {
+          missed = 0;
+        } else {
+          missed += 1;
+          if (missed >= 3) { // 连续 3 拍(~75s)才判死:单次 pong 迟到不误杀隧道
+            log.error(`[tapmux] relay 心跳连续 ${missed} 拍失联,重连`);
+            try { ws.terminate(); } catch {}
+            return;
+          }
+        }
         alive = false;
         try { ws.ping(); } catch {}
       }, 25_000);
@@ -115,7 +125,10 @@ export function startAgent(config, { log = console, internalSecret = '' } = {}) 
         backoff = Math.min(backoff * 1.7, 30_000);
       }
     };
-    ws.on('close', retry);
+    ws.on('close', (code, reason) => {
+      log.error(`[tapmux] relay 断开 code=${code} reason=${String(reason) || '(无)'},${Math.round(backoff / 1000)}s 后重连`);
+      retry();
+    });
     ws.on('error', (err) => { log.error('[tapmux] relay 连接错误:', err.message); try { ws.terminate(); } catch {} });
   }
 

@@ -31,6 +31,15 @@ WantedBy=default.target
   console.log(`已写入 ${file}`);
   console.log('接着执行:');
   console.log('  systemctl --user daemon-reload && systemctl --user enable --now tapmux');
+  // linger 未开时,SSH 断开会连坐 user 服务(真机踩过:掉线时间=用户离线时间)
+  try {
+    const { execSync } = await import('node:child_process');
+    const who = os.userInfo().username;
+    if (!/Linger=yes/.test(execSync(`loginctl show-user ${who} -p Linger`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString())) {
+      console.log(`⚠️  linger 未开启:SSH 断开后服务会被系统回收。执行一次:`);
+      console.log(`  loginctl enable-linger ${who}`);
+    }
+  } catch {}
 } else if (cmd === 'relay-join') {
   // tapmux relay-join <https://relay域名> <邀请码> <设备名> [代理url]
   const [base, invite, name, proxyUrl] = process.argv.slice(3);
