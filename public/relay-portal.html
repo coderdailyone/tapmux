@@ -208,7 +208,13 @@ async function loadDevices() {
   if (!devices.length) { box.innerHTML = '<div class="empty">名下还没有机器,生成邀请码接一台吧。</div>'; return; }
   box.innerHTML = '';
   for (const d of devices.sort((a, b) => Number(b.online) - Number(a.online))) {
-    const upgradable = me.relayVersion && d.version !== me.relayVersion; // 版本未知(旧 agent 不上报)也算可升级
+    // 仅当设备版本低于 relay 才标可升级(数值化 semver 比较);未知版本(旧 agent)也标
+    const semLt = (a, b) => {
+      const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+      for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0); }
+      return false;
+    };
+    const upgradable = me.relayVersion && (!d.version || semLt(d.version, me.relayVersion));
     const row = document.createElement('a');
     row.className = 'row';
     row.href = d.online ? `/d/${encodeURIComponent(d.name)}/` : 'javascript:void 0';
