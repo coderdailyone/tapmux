@@ -89,9 +89,25 @@ export async function killSession(name) {
   await tmux(['kill-session', '-t', `=${name}`]);
 }
 
+// pane 是否处于 copy-mode 等模式(回滚看历史时)
+async function paneInMode(name) {
+  return (await tmux(['display-message', '-p', '-t', `=${name}:`, '#{pane_in_mode}'])).trim() === '1';
+}
+
+// 退出 copy-mode 回到实时画面。回滚看完历史没滚回底部时 pane 仍在 copy-mode:
+// paste-buffer 直写 pane,文字能进应用,但 send-keys 的 Enter 会被 copy-mode 吃掉
+// (emacs 键表里 Enter 无绑定),而且屏幕冻在历史视图上——手机端看起来就是
+// "点了发送没反应,按一下 Esc 才显示出来"。所以任何要送进应用的输入先退模式。
+export async function exitMode(name) {
+  if (await paneInMode(name)) {
+    await tmux(['send-keys', '-t', `=${name}:`, '-X', 'cancel']);
+  }
+}
+
 // 整段注入文本:load-buffer + paste-buffer(-p 尊重应用的括号粘贴模式)。
 // 可靠处理中文/多行/特殊字符,绕开逐键序列的一切坑。
 export async function sendText(name, text, { enter = false } = {}) {
+  await exitMode(name);
   const buf = `tapmux-${crypto.randomBytes(4).toString('hex')}`;
   await tmux(['load-buffer', '-b', buf, '-'], { input: text });
   await tmux(['paste-buffer', '-p', '-d', '-b', buf, '-t', `=${name}:`]);
@@ -110,7 +126,16 @@ export function validKeys(keys) {
   return Array.isArray(keys) && keys.length > 0 && keys.length <= 5 && keys.every((k) => KEY_ALLOW.has(k));
 }
 
+// 这些键在 copy-mode 里有意义(翻历史/退出),原样交给 copy-mode;其余键(Enter/Tab/^C…)
+// 是给应用的,pane 在 copy-mode 时先退出再送,否则被模式吞掉
+const MODE_NAV_KEYS = new Set(['Up', 'Down', 'Left', 'Right', 'PageUp', 'PageDown', 'Home', 'End', 'Escape']);
+
+export function keysNeedLiveMode(keys) {
+  return keys.some((k) => !MODE_NAV_KEYS.has(k));
+}
+
 export async function sendKeys(name, keys) {
+  if (keysNeedLiveMode(keys)) await exitMode(name);
   await tmux(['send-keys', '-t', `=${name}:`, ...keys]);
 }
 

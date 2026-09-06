@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { validSessionName, validKeys } from '../server/tmux.js';
+import { validSessionName, validKeys, keysNeedLiveMode } from '../server/tmux.js';
 import { tokensEqual, parseCookies } from '../server/auth.js';
 import { extForMime, saveImage, resolveServable, cleanupOldUploads } from '../server/uploads.js';
 import { previewFromCapture, detectClaudeState, contentFingerprint } from '../server/preview.js';
@@ -210,4 +210,13 @@ test('上传落盘 + 只读回自己的目录 + 过期清理', () => {
   assert.ok(!fs.existsSync(oldDir));
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('copy-mode 里:翻页/退出键原样交给模式,Enter/Tab/^C 等要先退模式再送', () => {
+  assert.equal(keysNeedLiveMode(['Up']), false);
+  assert.equal(keysNeedLiveMode(['PageDown', 'Escape']), false);
+  assert.equal(keysNeedLiveMode(['Enter']), true);
+  assert.equal(keysNeedLiveMode(['Tab']), true);
+  assert.equal(keysNeedLiveMode(['C-c']), true);
+  assert.equal(keysNeedLiveMode(['Up', 'Enter']), true);
 });
