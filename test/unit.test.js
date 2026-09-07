@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { validSessionName, validKeys, keysNeedLiveMode } from '../server/tmux.js';
+import { validSessionName, validKeys, keysNeedLiveMode, wheelReports } from '../server/tmux.js';
 import { tokensEqual, parseCookies } from '../server/auth.js';
 import { extForMime, saveImage, resolveServable, cleanupOldUploads } from '../server/uploads.js';
 import { previewFromCapture, detectClaudeState, contentFingerprint } from '../server/preview.js';
@@ -219,4 +219,9 @@ test('copy-mode 里:翻页/退出键原样交给模式,Enter/Tab/^C 等要先退
   assert.equal(keysNeedLiveMode(['Tab']), true);
   assert.equal(keysNeedLiveMode(['C-c']), true);
   assert.equal(keysNeedLiveMode(['Up', 'Enter']), true);
+});
+
+test('滚轮报文:SGR 格式,64 上 65 下,按数量重复', () => {
+  assert.equal(wheelReports('up', 2), '\u001b[<64;2;2M\u001b[<64;2;2M');
+  assert.equal(wheelReports('down', 1), '\u001b[<65;2;2M');
 });

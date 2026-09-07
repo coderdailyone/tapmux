@@ -357,13 +357,23 @@ function connect() {
   ws.onerror = () => { try { ws.close(); } catch {} };
 }
 
+// xterm 在应用开了鼠标模式时把滚轮翻译成 SGR 报文(ESC[<b;x;yM),焦点事件是 ESC[I / ESC[O
+const isTerminalReport = (d) => /^(\x1b\[(<\d+;\d+;\d+[Mm]|[IO]))+$/.test(d);
+
+// 应用是否自己接管了鼠标(Claude Code 2.1+ 回复在应用内虚拟滚动,不进 tmux 历史)
+function appHasMouse() {
+  try { return Boolean(state.term) && state.term.modes.mouseTrackingMode !== 'none'; }
+  catch { return false; }
+}
+
 function setMode(mode) {
   state.mode = mode;
   const direct = mode === 'direct';
   $('#quickbar').classList.toggle('hidden', !direct);
   $('#inputbar').classList.toggle('hidden', direct);
   if (state.term) {
-    state.term.options.disableStdin = !direct;
+    // 不用 disableStdin:它会连鼠标滚轮报文一起掐掉,输入条模式就没法滑动翻 Claude Code 的回复。
+    // 键盘输入的过滤在 onData 里按模式做。
     if (direct) state.term.focus();
     else state.term.blur();
   }
@@ -405,7 +415,8 @@ function openTerm(name) {
   state.fit = fit;
 
   term.onData((d) => {
-    if (state.mode !== 'direct') return;
+    // 输入条模式只放行鼠标/焦点报文(滚轮翻页靠它),键盘输入一律不发
+    if (state.mode !== 'direct' && !isTerminalReport(d)) return;
     let data = d;
     if (state.ctrlSticky && d.length === 1) {
       const c = d.toUpperCase().charCodeAt(0);
@@ -447,24 +458,42 @@ document.addEventListener('visibilitychange', () => {
   if (!state.cur) loadList();
 });
 
-/* ---------- 触屏滑动 → 合成滚轮事件 ----------
-   iOS 上 xterm.js 不把触摸翻译成滚动;把手指位移合成 WheelEvent 喂给它,
-   后面 xterm→tmux(mouse on)的整套滚动逻辑全部复用。 */
+/* ---------- 触屏滑动 → 滚动 ----------
+   iOS 上 xterm.js 不把触摸翻译成滚动。两条路:
+   1) 应用接管了鼠标(Claude Code):按手指走过的行数直接发 SGR 滚轮报文,应用滚自己的虚拟视口;
+   2) 否则把手指位移合成 WheelEvent 喂给 xterm,复用它的滚动逻辑。 */
 (() => {
   const wrap = $('#term-wrap');
   let lastY = null;
   let acc = 0;
+  let rowAcc = 0;
   wrap.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
       lastY = e.touches[0].clientY;
       acc = 0;
+      rowAcc = 0;
     }
   }, { passive: true });
   wrap.addEventListener('touchmove', (e) => {
     if (lastY === null || e.touches.length !== 1 || !state.term) return;
     const t = e.touches[0];
-    acc += (lastY - t.clientY) * 3;
+    const dy = lastY - t.clientY;
     lastY = t.clientY;
+    if (appHasMouse()) {
+      const rect = $('#term').getBoundingClientRect();
+      const rowH = rect.height / Math.max(1, state.term.rows);
+      rowAcc += dy;
+      const rows = Math.trunc(rowAcc / rowH);
+      if (rows === 0) return;
+      rowAcc -= rows * rowH;
+      // Claude Code 约两个报文滚一行,按行数翻倍发,手指走一行画面滚一行
+      const col = Math.max(1, Math.min(state.term.cols, Math.ceil((t.clientX - rect.left) / (rect.width / state.term.cols))));
+      const row = Math.max(1, Math.min(state.term.rows, Math.ceil((t.clientY - rect.top) / rowH)));
+      const btn = rows > 0 ? 64 : 65;
+      wsSend({ t: 'input', data: `\x1b[<${btn};${col};${row}M`.repeat(Math.abs(rows) * 2) });
+      return;
+    }
+    acc += dy * 3;
     // xterm 丢弃两类滚轮:无坐标的(算不出行列报文)、折算不足一行的。
     // 所以:带真实触点坐标 + 位移攒够 ~一行字高才派发,派发到手指所在元素走原生冒泡路径。
     if (Math.abs(acc) < 24) return;
@@ -523,7 +552,7 @@ $('#quickbar').addEventListener('click', async (ev) => {
       state.term.focus();
     } else if (act === 'scroll') {
       await api(`/api/sessions/${encodeURIComponent(state.cur)}/send`, { method: 'POST', body: { copyMode: true } });
-      toast('回滚模式:滑动翻页,Esc 退出');
+      toast(appHasMouse() ? '往上翻一页:继续滑动或用侧栏 ▲▼' : '回滚模式:滑动翻页,Esc 退出');
     } else if (act === 'font-' || act === 'font+') {
       state.fontSize = Math.min(22, Math.max(10, state.fontSize + (act === 'font+' ? 1 : -1)));
       state.term.options.fontSize = state.fontSize;

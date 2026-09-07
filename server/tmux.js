@@ -139,16 +139,39 @@ export async function sendKeys(name, keys) {
   await tmux(['send-keys', '-t', `=${name}:`, ...keys]);
 }
 
-// 进入回滚(copy-mode),之后触屏滚动/方向键即可翻历史,Esc 退出
+// 进入回滚(copy-mode),之后触屏滚动/方向键即可翻历史,Esc 退出。
+// 应用自己管滚动时(Claude Code)没有历史可进,改为翻一页(PageUp)。
 export async function enterCopyMode(name) {
+  if (!(await paneInMode(name)) && (await paneMouseApp(name))) {
+    await tmux(['send-keys', '-t', `=${name}:`, 'PageUp']);
+    return;
+  }
   await tmux(['copy-mode', '-e', '-t', `=${name}:`]);
 }
 
-// 侧边滚轮:不依赖浏览器滚轮事件,直接驱动 tmux 滚动。
-// 不在 copy-mode 时向上滚自动进入;-e 保证滚回底部自动退出回实时。
+// pane 里的应用是否自己接管了鼠标(Claude Code 2.1+ 开 SGR 鼠标模式,回复在应用内虚拟滚动,
+// 不再写进 tmux 历史——copy-mode 里根本没东西可翻,只能把滚轮事件原样喂给应用)
+async function paneMouseApp(name) {
+  const out = await tmux(['display-message', '-p', '-t', `=${name}:`, '#{mouse_any_flag}#{mouse_all_flag}#{mouse_button_flag}#{mouse_standard_flag}']);
+  return /1/.test(out);
+}
+
+// SGR 鼠标滚轮报文(64=上滚 65=下滚),坐标随便给个 pane 内的点
+export function wheelReports(dir, n) {
+  return `\u001b[<${dir === 'up' ? 64 : 65};2;2M`.repeat(n);
+}
+
+// 侧边滚轮:不依赖浏览器滚轮事件,直接驱动滚动。
+// 应用接管鼠标时(Claude Code)喂滚轮报文,让它滚自己的虚拟视口;
+// 否则走 tmux copy-mode:不在时向上滚自动进入;-e 保证滚回底部自动退出回实时。
 export async function scrollPane(name, dir) {
   const target = `=${name}:`;
-  const inMode = (await tmux(['display-message', '-p', '-t', target, '#{pane_in_mode}'])).trim() === '1';
+  const inMode = await paneInMode(name);
+  if (!inMode && (await paneMouseApp(name))) {
+    // Claude Code 两个报文滚一行,连发有加速:实测 6 个 ≈ 5-7 行,与 copy-mode 的 -N 5 手感一致
+    await tmux(['send-keys', '-t', target, '-l', wheelReports(dir, 6)]);
+    return;
+  }
   if (!inMode) {
     if (dir === 'down') return; // 本就在实时底部
     await tmux(['copy-mode', '-e', '-t', target]);
