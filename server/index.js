@@ -20,10 +20,12 @@ import { handleAttach } from './attach.js';
 import { previewFromCapture, detectClaudeState, contentFingerprint } from './preview.js';
 import { Notifier } from './notify.js';
 import { startAgent } from './agent.js';
-import { MacroEngine, validateMacros } from './macros.js';
+import { MacroEngine, validateMacros, macroAction, inputBusy } from './macros.js';
+import { Controller, screenTail, statusModel, modelCommand } from './control.js';
 
 const config = loadConfig();
 const store = new ManagedStore(config.dataDir);
+const controller = new Controller({ capture: capturePane, sendText, sendKeys });
 
 const pub = (f) => new URL(`../public/${f}`, import.meta.url).pathname;
 // 经模块解析找 vendor 文件:npm 全局安装/被依赖安装时 node_modules 位置不定,不能猜相对路径
@@ -87,9 +89,10 @@ async function paneSnapshot(name, isClaude) {
     return {
       preview: previewFromCapture(text),
       state: isClaude ? detectClaudeState(text) : null,
+      model: isClaude ? statusModel(text) : null,
     };
   } catch {
-    return { preview: [], state: null };
+    return { preview: [], state: null, model: null };
   }
 }
 
@@ -108,10 +111,51 @@ async function probe() {
     const snap = await paneSnapshot(m.name, m.cmds.includes('claude'));
     m.preview = snap.preview;
     m.state = snap.state;
+    m.model = snap.model;
     m.macros = store.macrosOf(m.name);
   }));
   const dead = store.names().filter((n) => !liveNames.has(n));
   return { managed, wild, dead };
+}
+
+// agent 接口的自述:agent 打一下 GET /api/agent 就知道能做什么
+const AGENT_HELP = {
+  about: 'tapmux agent 接口:往纳管的 tmux / Claude Code 会话下指令。所有指令只在会话空闲且没人打字时注入(force 可跳过)。',
+  auth: 'Authorization: Bearer <config.json 里的 token>;经 relay 时带 Cookie: tapmux_user=<用户 token>',
+  endpoints: [
+    'GET  /api/sessions                         纳管会话列表(state / model / preview)',
+    'GET  /api/sessions/:name/screen?lines=40   当前屏幕纯文本 + 状态 + 模型 + 排队 + 最近操作',
+    'POST /api/sessions/:name/command  {text, enter?, confirm?, persist?, waitSec?, force?, queue?, ttlSec?}',
+    'POST /api/sessions/:name/model    {model, persist?, waitSec?, force?, queue?}',
+    'POST /api/sessions/:name/macros/:idOrName/run  {waitSec?, force?, queue?}',
+    'POST /api/sessions/:name/send     {keys:["Escape"]}  特殊键',
+    'DELETE /api/sessions/:name/queue/:id       取消排队项',
+  ],
+  notes: [
+    '"/model <名>" 走选择器只改本会话,不动全机默认;persist:true 才连默认一起改',
+    'model 可写 fable / opus / sonnet / haiku(取该家族最新)、fable 5.1、claude-fable-5-1、default',
+    '会话在忙:409 busy;waitSec(≤15)等一会;queue:true 排队到空闲再执行(给自己所在会话下指令就用这个)',
+  ],
+};
+
+async function runAction(res, name, action, body, source) {
+  if (action.model || modelCommand(action.text || '')) {
+    const cmds = (await paneCommands()).get(name) || [];
+    if (!cmds.includes('claude')) return sendJson(res, 400, { error: '这个会话里没在跑 Claude Code,切不了模型' });
+  }
+  if (body.queue === true) {
+    // 空闲就当场执行,忙才排队
+    if (!controller.busy(name) && (await controller.gateOpen(name)).open) {
+      const r = await controller.command(name, action, { source });
+      if (!r.busy) return sendJson(res, r.ok ? 200 : 422, r);
+    }
+    const q = controller.enqueue(name, action, { ttlSec: body.ttlSec, source });
+    if (q.error) return sendJson(res, 429, { error: q.error });
+    return sendJson(res, 202, { ok: true, queued: q.id, position: q.position });
+  }
+  const r = await controller.command(name, action, { waitSec: body.waitSec, force: body.force === true, source });
+  if (r.busy) return sendJson(res, 409, { error: 'busy', ...r });
+  return sendJson(res, r.ok ? 200 : 422, r);
 }
 
 async function handleApi(req, res, url) {
@@ -119,6 +163,10 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && url.pathname === '/api/sessions') {
     return sendJson(res, 200, await probe());
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/agent') {
+    return sendJson(res, 200, AGENT_HELP);
   }
 
   if (req.method === 'POST' && url.pathname === '/api/sessions') {
@@ -146,6 +194,64 @@ async function handleApi(req, res, url) {
       for (const m of body.macros) if (prev.has(m.id)) m.lastFiredAt = prev.get(m.id);
       store.setMacros(name, body.macros);
       return sendJson(res, 200, { ok: true });
+    }
+
+    // ---- agent 接口(只认纳管且在活的会话)----
+    const agentRoute = (req.method === 'GET' && parts[3] === 'screen')
+      || (req.method === 'POST' && (parts[3] === 'command' || parts[3] === 'model'))
+      || (req.method === 'POST' && parts[3] === 'macros' && parts[4] && parts[5] === 'run')
+      || (req.method === 'DELETE' && parts[3] === 'queue' && parts[4]);
+    if (agentRoute) {
+      if (!store.has(name)) return sendJson(res, 403, { error: '未纳管的会话' });
+      if (!(await hasSession(name))) return sendJson(res, 404, { error: '会话不存在' });
+    }
+
+    if (req.method === 'GET' && parts[3] === 'screen') {
+      const lines = Math.min(Math.max(parseInt(url.searchParams.get('lines'), 10) || 40, 1), 200);
+      const text = await capturePane(name);
+      const claude = ((await paneCommands()).get(name) || []).includes('claude');
+      return sendJson(res, 200, {
+        name,
+        claude,
+        state: claude ? detectClaudeState(text) : null,
+        inputBusy: inputBusy(text),
+        model: claude ? statusModel(text) : null,
+        screen: screenTail(text, lines),
+        queue: controller.listQueue(name),
+        recent: controller.recentOf(name).slice(-10),
+      });
+    }
+
+    if (req.method === 'POST' && parts[3] === 'command') {
+      const body = await readJson(req);
+      if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 4000) {
+        return sendJson(res, 400, { error: 'text 必填,4000 字以内' });
+      }
+      const action = { text: body.text, enter: body.enter !== false, confirm: body.confirm === true, persist: body.persist === true };
+      return runAction(res, name, action, body, 'agent');
+    }
+
+    if (req.method === 'POST' && parts[3] === 'model') {
+      const body = await readJson(req);
+      if (typeof body.model !== 'string' || !body.model.trim() || body.model.length > 80) {
+        return sendJson(res, 400, { error: 'model 必填' });
+      }
+      return runAction(res, name, { model: body.model.trim(), persist: body.persist === true }, body, 'agent');
+    }
+
+    if (req.method === 'POST' && parts[3] === 'macros' && parts[5] === 'run') {
+      const key = decodeURIComponent(parts[4]);
+      const m = store.macrosOf(name).find((x) => x.id === key) || store.macrosOf(name).find((x) => x.name === key);
+      if (!m) return sendJson(res, 404, { error: '没有这条宏' });
+      const body = await readJson(req);
+      m.lastFiredAt = Date.now(); // 手动跑过也算一次,免得巡检紧接着再触发
+      store.save();
+      return runAction(res, name, macroAction(m), body, `macro:${m.name}(手动)`);
+    }
+
+    if (req.method === 'DELETE' && parts[3] === 'queue') {
+      const ok = controller.cancel(name, decodeURIComponent(parts[4]));
+      return sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: '没有这个排队项' });
     }
 
     if (req.method === 'POST' && parts[3] === 'adopt') {
@@ -295,8 +401,9 @@ const internalSecret = crypto.randomBytes(16).toString('hex');
 setInternalSecret(internalSecret);
 startAgent(config, { internalSecret });
 
-const macroEngine = new MacroEngine({ store, capture: capturePane, sendText, sendKeys });
+const macroEngine = new MacroEngine({ store, capture: capturePane, controller });
 setInterval(() => macroEngine.tick(), 30_000).unref();
+setInterval(() => controller.tickQueue().catch((err) => console.error('[tapmux] 排队巡检失败:', err.message)), 3_000).unref();
 
 server.listen(config.port, config.bind, () => {
   const ifaces = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);

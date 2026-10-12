@@ -110,9 +110,9 @@ function macroPanel(s) {
     el.onclick = () => mut((list) => { list.splice(Number(el.dataset.d), 1); });
   });
   $('#mk-pin').onclick = () => macroForm(s, {
-    name: '钉住模型', type: 'missing', pattern: '\\[Fable 5\\]',
-    text: '/model claude-fable-5', confirmEnter: true, cooldownSec: 300,
-    note: '屏幕上找不到该字样(=被降级)且会话空闲时,自动注入指令并补确认。字样按你状态条实际显示改。',
+    name: '钉住模型', type: 'missing', pattern: '\\[Fable 5\\.1\\]',
+    text: '/model claude-fable-5-1', confirmEnter: false, cooldownSec: 300,
+    note: '状态条上找不到「[Fable 5.1]」(=被降级)且会话空闲时,自动切回 Fable 5.1。tapmux 发 /model 走选择器、只改本会话,不动全机默认模型。字样按你状态条实际显示改。',
   });
   $('#mk-custom').onclick = () => macroForm(s, {
     name: '', type: 'missing', pattern: '', text: '', confirmEnter: false, cooldownSec: 300,
@@ -239,7 +239,7 @@ async function loadList() {
       const el = card(`
         <div class="info">
           <div class="name">${s.name} ${badges(s)}</div>
-          <div class="meta">${s.windows} 窗口 · ${rel(s.created)}创建</div>
+          <div class="meta">${s.windows} 窗口 · ${rel(s.created)}创建${s.model ? ` · ${escapeHtml(s.model)}` : ''}</div>
           ${pv ? `<pre class="preview">${pv}</pre>` : ''}
         </div>
         <button class="btn mini${(s.macros || []).length ? ' has' : ''}">宏${(s.macros || []).length ? '·' + s.macros.length : ''}</button>

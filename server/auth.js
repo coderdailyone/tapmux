@@ -80,6 +80,17 @@ export function checkAuth(req, token) {
     return { ok: true };
   }
 
+  // agent/脚本用请求头带 token(tapmux ctl);不种 cookie
+  const bearer = /^Bearer\s+(\S+)$/i.exec(String(req.headers.authorization || ''));
+  if (bearer) {
+    if (tokensEqual(bearer[1], token)) {
+      recordOk(ip);
+      return { ok: true };
+    }
+    recordFail(ip);
+    return { ok: false };
+  }
+
   const url = new URL(req.url, 'http://x');
   const qtoken = url.searchParams.get('token');
   if (qtoken !== null) {

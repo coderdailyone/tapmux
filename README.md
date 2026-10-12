@@ -36,7 +36,8 @@
 - **PWA**:加入主屏幕即全屏应用,专属图标
 - **多机接入(relay)**:一台公网机 + 邀请码,承接任意多台内网机器,`/d/<设备名>/` 逐台直达
 - **完工提醒**:Claude 干完活 / 停下来等确认时,推送 Telegram(可选)
-- **会话宏**:条件触发的自动指令——屏幕缺失/出现某字样或定时,自动注入命令并可补确认;只在会话空闲且无人打字时动手,自带冷却。出厂预设「钉住模型」:检测到 Claude 被降级(状态条模型字样消失)自动 `/model` 钉回
+- **会话宏**:条件触发的自动指令——屏幕缺失/出现某字样或定时,自动注入命令并可补确认;只在会话空闲且无人打字时动手,自带冷却。出厂预设「钉住模型」:检测到 Claude 被降级(状态条模型字样消失)自动切回
+- **Agent 接口**:另一个 Claude 会话或脚本可以操作纳管会话——切模型、发斜杠指令或消息、跑宏、看屏幕。`tapmux ctl model kaggle fable` 一行搞定;与宏共用安全门,给自己所在的会话下指令自动排队到本轮结束
 
 ## 安装
 
@@ -88,6 +89,25 @@ tapmux relay-join https://你的域名 <邀请码> <设备名> [本地代理url]
 ```
 
 手机上只需登录一次:`https://你的域名/relay/login?token=<用户token>` → 进入「我的机器」门户,点任意一台直达,**全程不需要任何机器 token**(桥接凭与 relay 隧道同进程的内部密钥信任已过鉴权的流量;机器本地 token 仅用于直连形态)。管理:`users` / `devices` / `claim <设备> <用户>` / `revoke <设备>` / `user-revoke <用户>`。跨境等不稳链路时,relay-join 第四个参数填本地代理(如 `http://127.0.0.1:7890`),agent 上行隧道会走它——并且尽量用**域名**而非 IP 连 relay,才能吃上代理分流规则。
+
+## Agent 接口
+
+让另一个 agent(本机别的 Claude Code 会话、脚本、远程机器)操作纳管会话。例:你对一个 Claude 说「把 kaggle 会话切到 Fable」,它执行:
+
+```bash
+tapmux ctl model kaggle fable        # ✓ kaggle 已切到 Fable 5.1(仅本会话)
+tapmux ctl ls                        # 会话 / 状态 / 当前模型
+tapmux ctl screen kaggle -n 30       # 看屏幕
+tapmux ctl send kaggle /compact      # 发斜杠指令(或一句话)
+tapmux ctl macro kaggle 钉住模型      # 立刻跑一条已配置的宏
+tapmux ctl model . opus              # . = 自己所在的会话:自动排队,本轮回复结束后执行
+```
+
+- **切模型只改这个会话**:Claude Code 原生的 `/model <名>` 会顺手把全机「新会话默认模型」也改掉;tapmux 改为驱动选择器按 `s`(仅本会话),`--persist` 才连默认一起改。经 tapmux 发出的 `/model <名>`(agent 指令、宏)一律这样处理。有对话历史的会话会弹「Switch model?」(缓存作废),自动确认并在返回里提示代价。模型可写 `fable` / `opus` / `sonnet` / `haiku`(该家族最新)、`"fable 5.1"`、`claude-fable-5-1`、`default`
+- **安全门**:与宏相同,只在会话空闲、输入框没人打字时注入;忙就返回 busy(退出码 2),可 `--wait <秒>` 等或 `--queue` 排队到空闲,`--force` 跳过
+- **连接**:本机默认读 `~/.config/tapmux/config.json`;远程直连 `TAPMUX_URL=http://主机:7802 TAPMUX_TOKEN=<token>`;经 relay `TAPMUX_URL=https://<relay>/d/<设备> TAPMUX_USER_TOKEN=<用户token>`
+- **HTTP**:`Authorization: Bearer <token>`,`GET /api/agent` 返回自述。`POST /api/sessions/:name/model {model, persist?}`、`POST …/command {text, confirm?, waitSec?, queue?, force?}`、`POST …/macros/:idOrName/run`、`GET …/screen?lines=40`(含排队与最近操作)、`DELETE …/queue/:id`
+- 给 Claude Code 用的 skill 在 `skills/tapmux/SKILL.md`,拷到 `~/.claude/skills/tapmux/` 后,会话里直接说人话即可
 
 ## Telegram 完工提醒(可选)
 

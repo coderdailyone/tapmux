@@ -27,9 +27,13 @@ export function validateMacros(list) {
 
 // 有人正在输入框里打字?(❯ 后跟着非空内容)——宏绝不跟人抢键盘
 export function inputBusy(text) {
+  // 只看最后一个 ❯ 行:输入框在底部,上方正文里回显的历史提问("❯ /model …")也以 ❯ 开头,
+  // 取第一个会把空输入框误判成有人在打字,宏与 agent 指令就永远等不到门开。
+  const all = [...String(text).matchAll(/^[❯›]([^\n]*)$/gm)];
+  if (!all.length) return false;
   // [^\S\n] = 行内空白:不许 \s 跨行把下一行内容误判进输入框。
   // Claude Code 空输入框会显示占位提示(❯ Try "create a util...")——那是空,不是有人在打字。
-  const m = /^[❯›][^\S\n]+(\S.*)$/m.exec(String(text));
+  const m = /^[^\S\n]+(\S.*)$/.exec(all[all.length - 1][1]);
   if (!m) return false;
   return !/^Try "/.test(m[1]);
 }
@@ -46,14 +50,18 @@ export function shouldFire(macro, screenText, now) {
   return t.type === 'missing' ? !hit : hit;
 }
 
+// 宏动作 → 控制器动作(/model 由控制器走选择器、仅本会话)
+export function macroAction(m) {
+  return { text: m.action.text, enter: m.action.enter !== false, confirm: m.action.confirmEnter === true };
+}
+
 // ---- 引擎 ----
 
 export class MacroEngine {
-  constructor({ store, capture, sendText, sendKeys, log = console }) {
+  constructor({ store, capture, controller, log = console }) {
     this.store = store;
     this.capture = capture;
-    this.sendText = sendText;
-    this.sendKeys = sendKeys;
+    this.controller = controller;
     this.log = log;
     this.busy = false;
   }
@@ -65,7 +73,7 @@ export class MacroEngine {
       for (const name of this.store.names()) {
         const entry = this.store.managed.get(name);
         const macros = (entry?.macros || []).filter((m) => m.enabled !== false);
-        if (!macros.length) continue;
+        if (!macros.length || this.controller.busy(name)) continue; // agent 正在操作这个会话,本拍让路
         await this.observe(name, entry, macros).catch((err) => {
           this.log.error(`[tapmux] 宏巡检失败 ${name}:`, err.message);
         });
@@ -91,15 +99,7 @@ export class MacroEngine {
       m.lastFiredAt = now;
       this.store.save();
       this.log.log(`[tapmux] 宏触发 ${name}/${m.name}`);
-      await this.sendText(name, m.action.text, { enter: m.action.enter !== false });
-      if (m.action.confirmEnter) {
-        await new Promise((r) => setTimeout(r, 1800));
-        const after = await this.capture(name).catch(() => '');
-        if (detectClaudeState(after) === 'waiting') {
-          await this.sendKeys(name, ['Enter']);
-          this.log.log(`[tapmux] 宏补确认 ${name}/${m.name}`);
-        }
-      }
+      await this.controller.command(name, macroAction(m), { source: `macro:${m.name}` });
       break; // 每拍每会话至多一发,避免连环注入互相踩
     }
   }

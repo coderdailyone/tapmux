@@ -68,11 +68,20 @@ WantedBy=default.target
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
   console.log(`已接入 relay,设备名 ${data.name};重启服务生效(systemctl --user restart tapmux)`);
   console.log(`访问入口: ${base.replace(/\/$/, '')}/d/${data.name}/?token=<本机token>`);
+} else if (cmd === 'ctl') {
+  const { main } = await import('./ctl.js');
+  try {
+    process.exitCode = await main(process.argv.slice(3));
+  } catch (err) {
+    console.error(`✗ ${err.cause?.code === 'ECONNREFUSED' ? '连不上 tapmux 服务(没在跑?)' : err.message}`);
+    process.exitCode = 1;
+  }
 } else if (cmd === undefined || cmd === 'start') {
   await import('../server/index.js');
 } else {
   console.log(`用法: tapmux [start]          启动桥接服务(默认)
       tapmux install-service  生成 systemd user unit 并打印启用命令
-      tapmux relay-join <url> <邀请码> <设备名> [代理url]  接入 relay`);
+      tapmux relay-join <url> <邀请码> <设备名> [代理url]  接入 relay
+      tapmux ctl <子命令>      给 agent/脚本用:切模型、下指令、看屏幕(tapmux ctl help)`);
   process.exit(cmd === 'help' || cmd === '--help' ? 0 : 1);
 }

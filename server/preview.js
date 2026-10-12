@@ -1,7 +1,7 @@
 // 会话卡片预览:从 capture-pane 文本中滤掉 Claude Code 的界面噪音,留末尾正文。
 // 纯函数,便于测试。
 // 含任何框线/横幅字符的行、状态区行,一律视为噪音(claude 正文极少用这些字符,预览宁缺勿噪)
-const NOISE = /[─╭╰╮╯│▛▜▝▘█▐▌░]|bypass permissions|^\[Fable|^Context|^Usage|Auto-updating|shift\+tab|^\d+ MCPs?|^[✻✽✢✳·✶✦✧*✘✗✓]\s|ed for \d+m?s\b|^[❯›]|Welcome back|esc to interrupt|Auto-update/;
+const NOISE = /[─╭╰╮╯│▛▜▝▘█▐▌░]|bypass permissions|^\[(?:Fable|Opus|Sonnet|Haiku)\b|^Context|^Usage|Auto-updating|shift\+tab|^\d+ MCPs?|^[✻✽✢✳·✶✦✧*✘✗✓]\s|ed for \d+m?s\b|^[❯›]|Welcome back|esc to interrupt|Auto-update/;
 
 // Claude Code 状态感知:从当前屏幕文本推断会话状态。
 // 顺序要紧:权限对话框出现时旋转器已消失,所以先判 waiting。
@@ -17,7 +17,7 @@ export function detectClaudeState(text) {
 
 // 内容指纹:滤掉每分钟自变的时钟/状态条/旋转器噪音后哈希正文。
 // 两拍指纹不同 = 屏幕在动 = 在干活(与 Claude Code 的 UI 文案彻底解耦)。
-const FP_NOISE = /\[Fable|Context |Usage |MCPs|bypass permissions|⏱|resets in|tokens\)|…|^─+$|^[✻✽✢✳✶✦✧∗·*✺✹✸⚹]\s/;
+const FP_NOISE = /\[(?:Fable|Opus|Sonnet|Haiku)\b|Context |Usage |MCPs|bypass permissions|⏱|resets in|tokens\)|…|^─+$|^[✻✽✢✳✶✦✧∗·*✺✹✸⚹]\s/;
 export function contentFingerprint(text) {
   const body = String(text)
     .split('\n')
