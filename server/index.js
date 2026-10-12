@@ -32,6 +32,9 @@ const pub = (f) => new URL(`../public/${f}`, import.meta.url).pathname;
 const require_ = createRequire(import.meta.url);
 const vendor = (spec) => require_.resolve(spec);
 
+// agent 文档的公开入口(llms.txt 是 agent 常去找的约定路径)
+const DOC_PATHS = new Set(['/agent.md', '/llms.txt']);
+
 // 显式静态文件表:不存在"按路径找文件",结构上无穿越可言
 const STATIC = {
   '/': [pub('index.html'), 'text/html; charset=utf-8', 'no-cache'],
@@ -40,6 +43,7 @@ const STATIC = {
   '/manifest.webmanifest': [pub('manifest.webmanifest'), 'application/manifest+json', 'no-cache'],
   '/icon.svg': [pub('icon.svg'), 'image/svg+xml', 'public, max-age=86400'],
   '/apple-touch-icon.png': [pub('apple-touch-icon.png'), 'image/png', 'public, max-age=86400'],
+  '/agent.md': [pub('agent.md'), 'text/markdown; charset=utf-8', 'no-cache'],
   '/vendor/xterm.js': [vendor('@xterm/xterm/lib/xterm.js'), 'text/javascript', 'public, max-age=604800'],
   '/vendor/xterm.css': [vendor('@xterm/xterm/css/xterm.css'), 'text/css', 'public, max-age=604800'],
   '/vendor/addon-fit.js': [vendor('@xterm/addon-fit/lib/addon-fit.js'), 'text/javascript', 'public, max-age=604800'],
@@ -118,26 +122,6 @@ async function probe() {
   return { managed, wild, dead };
 }
 
-// agent 接口的自述:agent 打一下 GET /api/agent 就知道能做什么
-const AGENT_HELP = {
-  about: 'tapmux agent 接口:往纳管的 tmux / Claude Code 会话下指令。所有指令只在会话空闲且没人打字时注入(force 可跳过)。',
-  auth: 'Authorization: Bearer <config.json 里的 token>;经 relay 时带 Cookie: tapmux_user=<用户 token>',
-  endpoints: [
-    'GET  /api/sessions                         纳管会话列表(state / model / preview)',
-    'GET  /api/sessions/:name/screen?lines=40   当前屏幕纯文本 + 状态 + 模型 + 排队 + 最近操作',
-    'POST /api/sessions/:name/command  {text, enter?, confirm?, persist?, waitSec?, force?, queue?, ttlSec?}',
-    'POST /api/sessions/:name/model    {model, persist?, waitSec?, force?, queue?}',
-    'POST /api/sessions/:name/macros/:idOrName/run  {waitSec?, force?, queue?}',
-    'POST /api/sessions/:name/send     {keys:["Escape"]}  特殊键',
-    'DELETE /api/sessions/:name/queue/:id       取消排队项',
-  ],
-  notes: [
-    '"/model <名>" 走选择器只改本会话,不动全机默认;persist:true 才连默认一起改',
-    'model 可写 fable / opus / sonnet / haiku(取该家族最新)、fable 5.1、claude-fable-5-1、default',
-    '会话在忙:409 busy;waitSec(≤15)等一会;queue:true 排队到空闲再执行(给自己所在会话下指令就用这个)',
-  ],
-};
-
 async function runAction(res, name, action, body, source) {
   if (action.model || modelCommand(action.text || '')) {
     const cmds = (await paneCommands()).get(name) || [];
@@ -166,7 +150,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/agent') {
-    return sendJson(res, 200, AGENT_HELP);
+    return send(res, 200, fs.readFileSync(STATIC['/agent.md'][0]), { 'content-type': 'text/markdown; charset=utf-8' });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/sessions') {
@@ -311,11 +295,17 @@ async function handleApi(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
+  // agent 接口文档公开可读:agent 拿到网址就能自学怎么鉴权、怎么调(内容同 npm 包,不含任何机器信息)
+  if (DOC_PATHS.has(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+    const [file, type, cache] = STATIC['/agent.md'];
+    return send(res, 200, fs.readFileSync(file), { 'content-type': type, 'cache-control': cache });
+  }
+
   const auth = checkAuth(req, config.token);
   if (!auth.ok) {
     if (auth.blocked) return send(res, 429, '尝试过多,稍后再试');
-    if (url.pathname.startsWith('/api/')) return sendJson(res, 401, { error: 'unauthorized' });
-    return send(res, 401, '<meta charset="utf-8">未授权:请用带 token 的完整链接打开', { 'content-type': 'text/html; charset=utf-8' });
+    if (url.pathname.startsWith('/api/')) return sendJson(res, 401, { error: 'unauthorized', docs: '/agent.md' });
+    return send(res, 401, '<meta charset="utf-8">未授权:请用带 token 的完整链接打开<br><small>AI agent / 脚本:接口文档见 <a href="/agent.md">/agent.md</a>(无需登录)</small>', { 'content-type': 'text/html; charset=utf-8' });
   }
   if (auth.redirect) {
     // 相对跳转:经 relay 挂在子路径下时,浏览器会基于当前 URL 解析,直连时等价于 "/"

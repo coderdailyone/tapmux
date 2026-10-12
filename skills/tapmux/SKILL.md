@@ -5,7 +5,7 @@ description: 操作本机 tapmux 纳管的其他 tmux / Claude Code 会话:给�
 
 # tapmux:操作别的 Claude Code 会话
 
-用 `tapmux ctl` 命令。它连本机 tapmux 服务,只能动纳管清单里的会话,注入前会自动等「会话空闲、输入框没人打字」。
+用 `tapmux ctl` 命令。它连本机 tapmux 服务,只能动纳管清单里的会话,注入前会自动等「会话空闲、输入框没人打字」。完整的 HTTP 接口文档由网站自己提供:`curl -s http://127.0.0.1:7802/agent.md`(无需登录;也在 `/llms.txt`)。
 
 ## 先确认会话名
 

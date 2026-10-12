@@ -106,8 +106,8 @@ tapmux ctl model . opus              # . = 自己所在的会话:自动排队,�
 - **切模型只改这个会话**:Claude Code 原生的 `/model <名>` 会顺手把全机「新会话默认模型」也改掉;tapmux 改为驱动选择器按 `s`(仅本会话),`--persist` 才连默认一起改。经 tapmux 发出的 `/model <名>`(agent 指令、宏)一律这样处理。有对话历史的会话会弹「Switch model?」(缓存作废),自动确认并在返回里提示代价。模型可写 `fable` / `opus` / `sonnet` / `haiku`(该家族最新)、`"fable 5.1"`、`claude-fable-5-1`、`default`
 - **安全门**:与宏相同,只在会话空闲、输入框没人打字时注入;忙就返回 busy(退出码 2),可 `--wait <秒>` 等或 `--queue` 排队到空闲,`--force` 跳过
 - **连接**:本机默认读 `~/.config/tapmux/config.json`;远程直连 `TAPMUX_URL=http://主机:7802 TAPMUX_TOKEN=<token>`;经 relay `TAPMUX_URL=https://<relay>/d/<设备> TAPMUX_USER_TOKEN=<用户token>`
-- **HTTP**:`Authorization: Bearer <token>`,`GET /api/agent` 返回自述。`POST /api/sessions/:name/model {model, persist?}`、`POST …/command {text, confirm?, waitSec?, queue?, force?}`、`POST …/macros/:idOrName/run`、`GET …/screen?lines=40`(含排队与最近操作)、`DELETE …/queue/:id`
-- 给 Claude Code 用的 skill 在 `skills/tapmux/SKILL.md`,拷到 `~/.claude/skills/tapmux/` 后,会话里直接说人话即可
+- **接口文档在网站里**:`/agent.md`(同 `/llms.txt`,无需登录;源文件 [public/agent.md](public/agent.md)),写了鉴权、全部端点、状态码和行为规则。首页 `<link rel="alternate">`、401 返回、relay 登录页都指向它,agent 拿到网址就能自学,不用预装任何东西。经 relay 时 `https://<relay>/relay/agent.md`(也在根路径 `/agent.md`)与 `/d/<设备>/agent.md` 由 relay 直接回答
+- 可选:给 Claude Code 的 skill 在 `skills/tapmux/SKILL.md`,拷到 `~/.claude/skills/tapmux/` 后,本机会话听到「把 kaggle 切到 fable」就会自己去用
 
 ## Telegram 完工提醒(可选)
 

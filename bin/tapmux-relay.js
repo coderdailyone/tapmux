@@ -111,6 +111,19 @@ function servePortalFile(res, file) {
   }
 }
 
+const AGENT_DOC_PATHS = new Set(['/agent.md', '/llms.txt', '/relay/agent.md', '/relay/llms.txt']);
+const UNAUTH_JSON = JSON.stringify({ error: 'unauthorized', docs: '/relay/agent.md' });
+function serveAgentDoc(res) {
+  try {
+    const b = fsMod.readFileSync(path.join(PORTAL_DIR, 'agent.md'));
+    res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8', 'cache-control': 'no-cache' });
+    res.end(b);
+  } catch {
+    res.writeHead(404);
+    res.end('not found');
+  }
+}
+
 // ---- 在线设备表:name -> { ws, streams: Map<sid, handler>, nextSid } ----
 const online = new Map();
 
@@ -166,6 +179,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // agent 接口文档公开可读(与设备端同一份,不含任何设备/用户信息)。
+  // /relay/ 下也放一份:常见反代只把 /relay/ 与 /d/ 转给 relay,根路径另有他用
+  if (AGENT_DOC_PATHS.has(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+    serveAgentDoc(res);
+    return;
+  }
+
   if (url.pathname === '/relay/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, devices: [...online.keys()] }));
@@ -206,7 +226,7 @@ const server = http.createServer(async (req, res) => {
   // ---- 管理 API(登录即用;写操作须同源;用户管理须管理员) ----
   if (url.pathname.startsWith('/relay/api/')) {
     const user = userFromReq(req);
-    if (!user) { res.writeHead(401, JSON_CT); res.end('{"error":"unauthorized"}'); return; }
+    if (!user) { res.writeHead(401, JSON_CT); res.end(UNAUTH_JSON); return; }
     if (req.method !== 'GET' && req.headers.origin) {
       let ok = false;
       try { ok = new URL(req.headers.origin).host === req.headers.host; } catch {}
@@ -269,10 +289,15 @@ const server = http.createServer(async (req, res) => {
     res.end();
     return;
   }
+  // 设备页里相对链接到的文档:由 relay 自己回答,任何设备名都一样回,不经设备、也不泄露设备在不在
+  if ((rest === '/agent.md' || rest === '/llms.txt') && (req.method === 'GET' || req.method === 'HEAD')) {
+    serveAgentDoc(res);
+    return;
+  }
   // 用户门禁:登录 + 属主匹配
   const user = userFromReq(req);
   if (!user) {
-    if (rest.startsWith('/api/') || rest.startsWith('/ws/')) { res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":"unauthorized"}'); }
+    if (rest.startsWith('/api/') || rest.startsWith('/ws/')) { res.writeHead(401, JSON_CT); res.end(JSON.stringify({ error: 'unauthorized', docs: `/d/${name}/agent.md` })); }
     else sendHtml(res, 302, '', { location: '/relay/login' });
     return;
   }
