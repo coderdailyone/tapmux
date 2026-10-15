@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { checkAuth, originOk, clientIp, setInternalSecret, isInternal } from './auth.js';
 import {
   listSessions, paneCommands, hasSession, createSession, killSession,
-  sendText, validSessionName, validKeys, sendKeys, enterCopyMode, scrollPane,
+  sendText, validSessionName, validKeys, sendKeys, enterCopyMode, scrollPane, scrollLines,
   setAlternateScreenOff, capturePane,
 } from './tmux.js';
 import { ManagedStore } from './sessions.js';
@@ -254,7 +254,7 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, { ok: true });
       }
       if (body.scroll === 'up' || body.scroll === 'down') {
-        await scrollPane(name, body.scroll);
+        await scrollPane(name, body.scroll, scrollLines(body.lines), { fine: Number.isInteger(body.lines) });
         return sendJson(res, 200, { ok: true });
       }
       if (body.keys !== undefined) {

@@ -117,7 +117,8 @@ section h2 {
 .panel-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* ---- 终端 ---- */
-#term-wrap { flex: 1; min-height: 0; background: #0a0a0c; padding: 2px 2px 0 8px; position: relative; }
+/* 终端区的上下滑动全由脚本接管(按应用翻页):不许浏览器把手势接成页面滚动/下拉刷新,否则中途就不再派发 touchmove */
+#term-wrap { flex: 1; min-height: 0; background: #0a0a0c; padding: 2px 2px 0 8px; position: relative; touch-action: none; }
 #term { height: 100%; }
 .xterm .xterm-viewport { background: transparent !important; }
 .scrollrail {

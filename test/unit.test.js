@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { validSessionName, validKeys, keysNeedLiveMode, wheelReports } from '../server/tmux.js';
+import { validSessionName, validKeys, keysNeedLiveMode, wheelReports, scrollLines, isCodexArgs, makePager } from '../server/tmux.js';
 import { tokensEqual, parseCookies } from '../server/auth.js';
 import { extForMime, saveImage, resolveServable, cleanupOldUploads } from '../server/uploads.js';
 import { previewFromCapture, detectClaudeState, contentFingerprint } from '../server/preview.js';
@@ -450,4 +450,34 @@ test('控制器安全门与排队:忙就不发,排队项等空闲才执行', asy
   const forced = await new Controller({ ...fakeClaude({ state: 'working' }), log: { log() {}, error() {} } })
     .command('x', { text: 'hi' }, { force: true });
   assert.equal(forced.ok, true, 'force 跳过安全门');
+});
+
+test('滚动行数:缺省 5,整数夹在 1..50,非整数一律回缺省', () => {
+  assert.equal(scrollLines(undefined), 5);
+  assert.equal(scrollLines(12), 12);
+  assert.equal(scrollLines(0), 1);
+  assert.equal(scrollLines(999), 50);
+  assert.equal(scrollLines('7'), 5);
+  assert.equal(scrollLines(2.5), 5);
+});
+
+test('认 codex 进程:原生二进制与 npm 的 node 包装都算,参数里提到 codex 的别的程序不算', () => {
+  assert.ok(isCodexArgs('node /usr/bin/codex'));
+  assert.ok(isCodexArgs('/usr/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex'));
+  assert.ok(isCodexArgs('codex --model gpt-6.1'));
+  assert.ok(!isCodexArgs('node /root/tapmux/server/index.js'));
+  assert.ok(!isCodexArgs('vim notes-about-codex'));
+  assert.ok(!isCodexArgs('grep codex log.txt'));
+});
+
+test('codex 翻页累积:攒够一页才翻,停手或换方向清零', () => {
+  const pager = makePager(1500);
+  assert.equal(pager('s', 'up', 3, 10, 0), 0);
+  assert.equal(pager('s', 'up', 4, 10, 100), 0);
+  assert.equal(pager('s', 'up', 5, 10, 200), 1, '累计 12 行 → 1 页,余 2');
+  assert.equal(pager('s', 'up', 8, 10, 300), 1, '余 2 + 8 = 10 → 1 页');
+  assert.equal(pager('s', 'up', 25, 10, 400), 2, '一次滑很远 → 多页');
+  assert.equal(pager('s', 'down', 9, 10, 500), 0, '换方向清零');
+  assert.equal(pager('s', 'down', 9, 10, 3000), 0, '停手超时清零,不带上次的 9');
+  assert.equal(pager('t', 'down', 10, 10, 3000), 1, '会话之间互不影响');
 });

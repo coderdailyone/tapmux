@@ -366,6 +366,29 @@ function appHasMouse() {
   catch { return false; }
 }
 
+// 不接管鼠标的应用:滚动按行数交给服务端(rows 正 = 往回翻),由它按应用决定怎么翻——
+// codex 发 PgUp/PgDn 翻它自己的记录,其余走 tmux copy-mode 翻 pane 历史。
+// 同一时刻只飞一个请求,其间累积的行数并进下一发,快速滑动也不会打出请求风暴
+const serverScroll = (() => {
+  let pending = 0;
+  let busy = false;
+  const flush = async () => {
+    if (busy || !pending || !state.cur) return;
+    const n = Math.max(-50, Math.min(50, pending));
+    pending -= n;
+    busy = true;
+    try {
+      await api(`/api/sessions/${encodeURIComponent(state.cur)}/send`, {
+        method: 'POST', body: { scroll: n > 0 ? 'up' : 'down', lines: Math.abs(n) },
+      });
+    } catch {} finally {
+      busy = false;
+      flush();
+    }
+  };
+  return (rows) => { pending += rows; flush(); };
+})();
+
 function setMode(mode) {
   state.mode = mode;
   const direct = mode === 'direct';
@@ -414,6 +437,22 @@ function openTerm(name) {
   state.term = term;
   state.fit = fit;
 
+  // 桌面滚轮/触控板同理:不接管鼠标的应用,滚轮折成行数交给服务端翻(见触屏滑动处的说明)
+  let wheelRows = 0;
+  term.attachCustomWheelEventHandler((ev) => {
+    if (appHasMouse()) return true;
+    const rowH = $('#term').getBoundingClientRect().height / Math.max(1, term.rows);
+    const perRow = ev.deltaMode === 1 ? 1 : ev.deltaMode === 2 ? 1 / term.rows : rowH;
+    wheelRows -= ev.deltaY / perRow; // 滚轮上推 deltaY<0 = 往回翻 = 正
+    const rows = Math.trunc(wheelRows);
+    if (rows) {
+      wheelRows -= rows;
+      serverScroll(rows);
+    }
+    ev.preventDefault();
+    return false;
+  });
+
   term.onData((d) => {
     // 输入条模式只放行鼠标/焦点报文(滚轮翻页靠它),键盘输入一律不发
     if (state.mode !== 'direct' && !isTerminalReport(d)) return;
@@ -459,33 +498,26 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------- 触屏滑动 → 滚动 ----------
-   iOS 上 xterm.js 不把触摸翻译成滚动。两条路:
-   1) 应用接管了鼠标(Claude Code):按手指走过的行数直接发 SGR 滚轮报文,应用滚自己的虚拟视口;
-   2) 否则把手指位移合成 WheelEvent 喂给 xterm,复用它的滚动逻辑。 */
+   按手指走过的行数滚(正 = 手指上推 = 往回翻,与侧栏 ▲ 同向):
+   1) 应用接管了鼠标(Claude Code):直接发 SGR 滚轮报文,应用滚自己的虚拟视口;
+   2) 否则(codex、shell…):行数交给服务端翻(codex 用 PgUp/PgDn 翻自己的记录,其余 tmux copy-mode)。
+      不能把滚轮交给 xterm——tmux 让它处在备用屏、没有本地回滚,xterm 会把滚轮变成 ↑↓ 键,
+      输入条模式下被丢掉,直敲模式下变成翻应用的输入历史(codex 里就是这样「翻不了页」)。 */
 (() => {
   const wrap = $('#term-wrap');
   let lastY = null;
-  let acc = 0;
   let rowAcc = 0;
-  wrap.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      lastY = e.touches[0].clientY;
-      acc = 0;
-      rowAcc = 0;
-    }
-  }, { passive: true });
-  wrap.addEventListener('touchmove', (e) => {
+  const move = (e) => {
     if (lastY === null || e.touches.length !== 1 || !state.term) return;
     const t = e.touches[0];
-    const dy = lastY - t.clientY;
+    const rect = $('#term').getBoundingClientRect();
+    const rowH = rect.height / Math.max(1, state.term.rows);
+    rowAcc += lastY - t.clientY;
     lastY = t.clientY;
+    const rows = Math.trunc(rowAcc / rowH);
+    if (rows === 0) return;
+    rowAcc -= rows * rowH;
     if (appHasMouse()) {
-      const rect = $('#term').getBoundingClientRect();
-      const rowH = rect.height / Math.max(1, state.term.rows);
-      rowAcc += dy;
-      const rows = Math.trunc(rowAcc / rowH);
-      if (rows === 0) return;
-      rowAcc -= rows * rowH;
       // Claude Code 约两个报文滚一行,按行数翻倍发,手指走一行画面滚一行
       const col = Math.max(1, Math.min(state.term.cols, Math.ceil((t.clientX - rect.left) / (rect.width / state.term.cols))));
       const row = Math.max(1, Math.min(state.term.rows, Math.ceil((t.clientY - rect.top) / rowH)));
@@ -493,21 +525,26 @@ document.addEventListener('visibilitychange', () => {
       wsSend({ t: 'input', data: `\x1b[<${btn};${col};${row}M`.repeat(Math.abs(rows) * 2) });
       return;
     }
-    acc += dy * 3;
-    // xterm 丢弃两类滚轮:无坐标的(算不出行列报文)、折算不足一行的。
-    // 所以:带真实触点坐标 + 位移攒够 ~一行字高才派发,派发到手指所在元素走原生冒泡路径。
-    if (Math.abs(acc) < 24) return;
-    e.target.dispatchEvent(new WheelEvent('wheel', {
-      deltaY: acc,
-      deltaMode: 0,
-      bubbles: true,
-      cancelable: true,
-      clientX: t.clientX,
-      clientY: t.clientY,
-    }));
-    acc = 0;
+    serverScroll(rows);
+  };
+  // 触摸事件钉在按下时的元素上;xterm 一重绘就把行里的 span 换掉,换掉后事件不再冒泡到 wrap,
+  // 滑到一半就断(从有字的地方起手最明显)。所以监听挂在起点元素自己身上,它离开文档也照样收得到
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    lastY = e.touches[0].clientY;
+    rowAcc = 0;
+    const tgt = e.target;
+    const end = () => {
+      lastY = null;
+      rowAcc = 0;
+      tgt.removeEventListener('touchmove', move);
+      tgt.removeEventListener('touchend', end);
+      tgt.removeEventListener('touchcancel', end);
+    };
+    tgt.addEventListener('touchmove', move, { passive: true });
+    tgt.addEventListener('touchend', end);
+    tgt.addEventListener('touchcancel', end);
   }, { passive: true });
-  wrap.addEventListener('touchend', () => { lastY = null; acc = 0; }, { passive: true });
 })();
 
 /* ---------- 侧边滚轮:直接驱动 tmux 滚动,点按滚 5 行,按住连滚 ---------- */
